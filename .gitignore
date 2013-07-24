@@ -1,0 +1,11 @@
+*.TXT
+*.CFG
+*.LOG
+*.BIN
+*.SOE
+*.o
+*.d
+*.h.gch
+bin/*
+.cproject
+.project
