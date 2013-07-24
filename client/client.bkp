@@ -1,0 +1,52 @@
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <malloc.h>
+#include "mms_client_connection.h"
+
+int main (int argc, char ** argv){
+
+
+	MmsConnection con = MmsConnection_create();
+//	LinkedList nameList;
+//	bool deletable;
+
+//	MmsIndication indication = MmsConnection_connect(con, "cems1", 102);
+	MmsIndication indication = MmsConnection_connect(con, "cems1", 102);
+	if (indication == MMS_OK){
+		printf("Conexão OK!!!\n");
+//		nameList = MmsConnection_getDomainNames(con);
+//        nameList = MmsConnection_getDomainVariableNames(con, "TESTE");
+//		nameList = MmsConnection_readNamedVariableListDirectory (con, "TESTE", "Bilateral_Table_ID", &deletable); 
+//      nameList = MmsConnection_getDomainVariableListNames(con, "TESTE");
+		MmsValue* value;
+
+		MmsConnection_getVariableAccessAttributes(con, "TESTE", "CBO$AL1$$MAPH$$B");
+
+		value = MmsConnection_readVariable(con, "TESTE", "CBO$AL1$$MAPH$$B");
+
+		printf("Read variable with value: %f\n", MmsValue_toFloat(value));
+
+/*		printf("Got domain names\n");
+		if(nameList == NULL) {
+			printf("empty nameList\n");
+			return 0;
+		}
+
+		LinkedList_printStringList(nameList);
+		*/
+	/*	
+		while((nameList = LinkedList_getNext(nameList)) != NULL){
+			char *str = (char *) (nameList->data);
+			printf("%s\n", str);
+		}*/
+	}else {
+		printf("erro de conexão %d", indication);
+	}
+	MmsConnection_destroy(con);
+	return 0;
+}
