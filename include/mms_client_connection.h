@@ -167,6 +167,12 @@ MmsConnection_connect(MmsConnection self, MmsClientError* mmsError, char* server
 LinkedList /* <char*> */
 MmsConnection_getDomainNames(MmsConnection self, MmsClientError* mmsError);
 
+LinkedList /* <char*> */
+mmsClient_getNameList(MmsConnection self, MmsClientError *mmsError,
+char* domainId,
+char objectClass,
+bool associationSpecific);
+
 /**
  * Get the names of all variables present in a MMS domain of the server.
  *
