@@ -65,7 +65,7 @@ typedef struct sMmsVariableSpecification {
 } MmsVariableSpecification;
 
 typedef void (*MmsInformationReportHandler) (void* parameter, char* domainName,
-        char* variableListName, MmsValue* value);
+        char* variableListName, MmsValue* value, LinkedList attributes, int attributesCount);
 
 /**
  * Opaque handle for MMS client connection instance.

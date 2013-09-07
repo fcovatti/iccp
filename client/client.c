@@ -6,14 +6,154 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <malloc.h>
+#include <signal.h>
 #include "mms_client_connection.h"
+//report handler
+static int rptCount = 0;
+
+static int running = 1;
+
+static void sigint_handler(int signalId)
+{
+	running = 0;
+}
+static int handle_digital_state(MmsValue * value){
+	if(value == NULL){
+		printf("Error null digital state value\n");
+		return -1;
+	}
+	printf("State_hi %d State_lo %d, Validity_hi %d, Validity_lo %d, CurrentSource_hi %d, CurrentSource_lo %d, NormalValue %d, TimeStampQuality %d \n", 
+				MmsValue_getBitStringBit(value,0),
+				MmsValue_getBitStringBit(value,1),
+				MmsValue_getBitStringBit(value,2),
+				MmsValue_getBitStringBit(value,3),
+				MmsValue_getBitStringBit(value,4),
+				MmsValue_getBitStringBit(value,5),
+				MmsValue_getBitStringBit(value,6),
+				MmsValue_getBitStringBit(value,7) );
+
+		//ESTADO
+		if (MmsValue_getBitStringBit(value,0) && !MmsValue_getBitStringBit(value,1)) {
+			printf("Estado Ligado\n");
+		}else if (!MmsValue_getBitStringBit(value,0) && MmsValue_getBitStringBit(value,1)) {
+			printf("Estado Desligado\n");
+		} else {
+			printf ("Estado Invalido\n");
+		}
+
+		//Validade
+		if (!MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
+			printf("Ponto Valido\n");
+		}else if (!MmsValue_getBitStringBit( value,2) && MmsValue_getBitStringBit(value,3)) {
+			printf("Ponto Segurado (Held)\n");
+		}else if (MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
+			printf("Ponto Suspeito (Suspect)\n");
+		} else {
+			printf ("Ponto Inválido\n");
+		}
+
+		// Origem
+		if (!MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
+			printf("Ponto Telemedido\n");
+		}else if (!MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
+			printf("Ponto Calculado\n");
+		}else if (MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
+			printf("Ponto Manual\n");
+		} else {
+			printf ("Ponto Estimado\n");
+		}
+
+		// Valor Normal
+		if (!MmsValue_getBitStringBit(value,6)){
+			printf ("Ponto Normal\n");
+		} else {
+			printf ("Ponto Anormal\n");
+		}
+
+		// Estampa de tempo
+		if (!MmsValue_getBitStringBit(value,7)){
+			printf ("Estampa de Tempo Valida\n");
+		} else {
+			printf ("Estampa de Tempo Invalida\n");
+		}
+
+		return 0;
+}
+static void
+informationReportHandler (void* parameter, char* domainName, char* variableListName, MmsValue* value, LinkedList attributes, int attributesCount)
+{
+	int i = 0,j;
+	if (value != NULL && attributes != NULL && attributesCount) {
+		printf("received report no %i, attributesCount %d: ", rptCount++, attributesCount);
+		LinkedList list_names	 = LinkedList_getNext(attributes);
+		while (list_names != NULL) {
+			char * attribute_name = (char *) list_names->data;
+			printf("Attributes %s\n", attribute_name);
+			list_names = LinkedList_getNext(list_names);
+			MmsValue * dataSetValue = MmsValue_getElement(value, i);
+			
+			/*if(dataSetValue != NULL){
+				printf ("data set type %d , %d\n",dataSetValue->type, i);
+			}*/
+			if (strcmp("Transfer_Set_Time_Stamp", attribute_name) == 0) {
+
+				printf("Read variable with value: %d\n", MmsValue_toUint32(dataSetValue));
+			}
+			if (strcmp("ds_001_dig", attribute_name) == 0) {
+				if(dataSetValue != NULL){
+					if (dataSetValue->value.octetString.buf != NULL) {
+						for (j=0; j < dataSetValue->value.octetString.size; j ++){
+							printf(" %x", dataSetValue->value.octetString.buf[j]);
+						}
+						printf("\n");
+						// create MmsValue
+						MmsValue * digital_state = MmsValue_newBitString(8);
+						memcpy(digital_state->value.bitString.buf, &dataSetValue->value.octetString.buf[dataSetValue->value.octetString.size-1], 1);
+						handle_digital_state(digital_state);
+					} else {
+						printf("empty bitstring\n");
+					}
+				} else {
+					printf(" NULL Element\n");
+				}
+			}
+			i++;
+
+		}
+/*		MmsValue* inclusionField = MmsValue_getElement(value, 3);
+
+		if (MmsValue_getBitStringBit(inclusionField, 4)) {
+			int valueIndex = MmsValue_getArraySize(value) - 1;
+
+			MmsValue* totW$Mag = MmsValue_getElement(value, valueIndex);
+
+			MmsValue* totW$Mag$f = MmsValue_getElement(totW$Mag, 0);
+
+			float measuredValue = MmsValue_toFloat(totW$Mag$f);
+
+			printf("MMXU1.TotW.mag.f = %f", measuredValue);
+		}
+*/
+		printf("\n");
+	} else{
+		printf("wrong report\n");
+	}
+	//MmsValue_delete(value);
+	//TODO: free values
+}
+
 
 int main (int argc, char ** argv){
 
+
+
 //	LinkedList nameList;
 	MmsClientError mmsError;
-
+	int i = 0;
+	int number_of_variables = 1;
 	MmsConnection con = MmsConnection_create();
+
+	signal(SIGINT, sigint_handler);
 	//bool deletable;
 
 //	MmsIndication indication = MmsConnection_connect(con, "cems1", 102);
@@ -61,10 +201,36 @@ int main (int argc, char ** argv){
 	//READ DATASETS
 	MmsValue* value;
 	value = MmsConnection_readVariable(con, &mmsError, "COS_A", "Next_DSTransfer_Set");
-	if (value == NULL)                                                                                                                       
-		printf("reading value failed! %d\n", mmsError);                                                                                                   
-	else{                                                                                                                                     
-		printf("Read variable with value: %f\n", MmsValue_toFloat(value));
+	
+	
+	if (value == NULL){                                                                                                                
+		printf("reading transfer set value failed! %d\n", mmsError);                                                                                                   
+		return -1;
+	}else{                                                                                                                                     
+		MmsValue* ts_elem;
+		ts_elem = MmsValue_getElement(value, 0);
+		if (ts_elem == NULL){
+			printf("reading transfer set value 0 failed! %d\n", mmsError);                                                                                                   
+			return -1;
+		} else {
+			printf("Read Digital transfer set index: %d\n", MmsValue_toUint32(ts_elem));
+		}
+		
+		ts_elem = MmsValue_getElement(value, 1);
+		if (ts_elem == NULL){
+			printf("reading transfer set value 1 failed! %d\n", mmsError);                                                                                                   
+			return -1;
+		} else {
+			printf("Read Digital transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
+		}
+
+		ts_elem = MmsValue_getElement(value, 2);
+		if (ts_elem == NULL){
+			printf("reading transfer set value 2 failed! %d\n", mmsError);                                                                                                   
+			return -1;
+		} else {
+			printf("Read Digital transfer set name: %s\n", MmsValue_toString(ts_elem));
+		}
 		MmsValue_delete(value); 
 	}
 
@@ -75,16 +241,19 @@ int main (int argc, char ** argv){
 	MmsVariableSpecification * ts   = MmsVariableSpecification_create ("COS_A", "Transfer_Set_Time_Stamp");
 	MmsVariableSpecification * ds   = MmsVariableSpecification_create ("COS_A", "DSConditions_Detected");
 	MmsVariableSpecification * cbo  = MmsVariableSpecification_create ("COS_A", "CBO$AL6$$XCBR5233");
+	MmsVariableSpecification * dbo  = MmsVariableSpecification_create ("COS_A", "CBO$AL6$$XCMD5233");
 	cbo->arrayIndex = 0;	
+	dbo->arrayIndex = 0;	
 
 	LinkedList_add(variables, name );
 	LinkedList_add(variables, ts);
 	LinkedList_add(variables, ds);
 	LinkedList_add(variables, cbo);
+	LinkedList_add(variables, dbo);
 
 	MmsConnection_defineNamedVariableList(con, &mmsError, "COS_A", "ds_001_dig", variables); 
 
-
+	LinkedList_destroy(variables);
 
 	//WRITE DATASETS TO TRANSFERSETS
 	//global
@@ -271,6 +440,7 @@ int main (int argc, char ** argv){
 		printf("reading value failed! %d\n", mmsError);                                                                                                   
 		return 0;
 	}else{
+		for (i=0; i < number_of_variables; i ++) {
 		MmsValue* dataSetValue;
 		MmsValue* dataSetElem;
 		MmsValue* timeStamp;
@@ -278,7 +448,7 @@ int main (int argc, char ** argv){
 		struct tm * time_result;
 		
 		//GET DATASET VALUES (FIRST 3 VALUES ARE ACCESS-DENIED)
-		dataSetValue = MmsValue_getElement(dataSet, 3);
+		dataSetValue = MmsValue_getElement(dataSet, 3+i);
 		if(dataSetValue == NULL) {
 			printf("could not get DATASET values\n");
 			return 0;
@@ -298,7 +468,7 @@ int main (int argc, char ** argv){
 		}
 		time_stamp = MmsValue_toUint32(timeStamp);
 		time_result = localtime(&time_stamp);
-		printf("TimeStamp %s\n", asctime(time_result));
+		printf("Data TimeStamp %s\n", asctime(time_result));
 
 		//Second Element DataState
 		dataSetElem = MmsValue_getElement(dataSetValue, 1);
@@ -306,64 +476,70 @@ int main (int argc, char ** argv){
 			printf("could not get digital DataState\n");
 			return 0;
 		}
-		printf("State_hi %d State_lo %d, Validity_hi %d, Validity_lo %d, CurrentSource_hi %d, CurrentSource_lo %d, NormalValue %d, TimeStampQuality %d \n", 
-				MmsValue_getBitStringBit(dataSetElem,0),
-				MmsValue_getBitStringBit(dataSetElem,1),
-				MmsValue_getBitStringBit(dataSetElem,2),
-				MmsValue_getBitStringBit(dataSetElem,3),
-				MmsValue_getBitStringBit(dataSetElem,4),
-				MmsValue_getBitStringBit(dataSetElem,5),
-				MmsValue_getBitStringBit(dataSetElem,6),
-				MmsValue_getBitStringBit(dataSetElem,7) );
-
-		if (MmsValue_getBitStringBit(dataSetElem,0) && !MmsValue_getBitStringBit(dataSetElem,1)) {
-			printf("Estado Ligado\n");
-		}
-		if (!MmsValue_getBitStringBit(dataSetElem,0) && MmsValue_getBitStringBit(dataSetElem,1)) {
-			printf("Estado Desligado\n");
-		} else {
-			printf ("Estado desconhecido\n");
-		}
-
-		if (!MmsValue_getBitStringBit(dataSetElem,0) && !MmsValue_getBitStringBit(dataSetElem,1)) {
-			printf("Ponto Valido\n");
-		}
-		if (!MmsValue_getBitStringBit(dataSetElem,0) && MmsValue_getBitStringBit(dataSetElem,1)) {
-			printf("Estado Desligado\n");
-		} else {
-			printf ("Estado desconhecido\n");
-		}
-
-
+		handle_digital_state(dataSetElem);
  		MmsValue_delete(dataSetValue); 
-	}
-		LinkedList_destroy(variables);
-/*
- 		value = MmsConnection_readVariable(con, &mmsError, "TESTE/MAR04", "C1E26ADB1A");
-		if (value == NULL)                                                                                                                       
-			printf("reading value failed! %d\n", mmsError);                                                                                                   
-		else{                                                                                                                                     
-			printf("Read variable with value: %f\n", MmsValue_toFloat(value));
-	 		MmsValue_delete(value); 
+
 		}
-		*/
-//		printf("Got domain names\n");
-/*		if(nameList == NULL) {
+		MmsConnection_setInformationReportHandler(con, informationReportHandler, NULL);
+#if 0
+		/* include data set name in the report */
+		MmsValue* optFlds = MmsValue_newBitString(10);
+		MmsValue_setBitStringBit(optFlds, 4, true);
+		MmsConnection_writeVariable(con, &mmsError, "ied1Inverter", "LLN0$RP$rcb1$OptFlds", optFlds);
+		MmsValue_delete(optFlds);
+
+		/* trigger only on data change or data update */
+		MmsValue* trgOps = MmsValue_newBitString(6);
+		MmsValue_setBitStringBit(trgOps, 1, true);
+		MmsValue_setBitStringBit(trgOps, 3, true);
+		MmsConnection_writeVariable(con, &mmsError, "ied1Inverter", "LLN0$RP$rcb1$TrgOps", optFlds);
+		MmsValue_delete(trgOps);
+
+		/* Enable report control block */
+		MmsValue* rptEnable = MmsValue_newBoolean(true);
+		MmsConnection_writeVariable(con, &mmsError, "ied1Inverter", "LLN0$RP$rcb1$RptEna", rptEnable);
+		MmsValue_delete(rptEnable);
+#endif
+
+		MmsValue* loop_value;
+		while(running) {
+			loop_value = MmsConnection_readVariable(con, &mmsError, "COS_A", "Bilateral_Table_ID");
+			if (loop_value == NULL){ 
+				printf("reading value failed! %d\n", mmsError);                                                                                                   
+				continue;
+			}else{                                                                                                                                     
+				sleep(1);
+			}
+		}
+
+		MmsValue_delete(value); 
+	}
+	/*
+	   value = MmsConnection_readVariable(con, &mmsError, "TESTE/MAR04", "C1E26ADB1A");
+	   if (value == NULL)                                                                                                                       
+	   printf("reading value failed! %d\n", mmsError);                                                                                                   
+	   else{                                                                                                                                     
+	   printf("Read variable with value: %f\n", MmsValue_toFloat(value));
+	   MmsValue_delete(value); 
+	   }
+	 */
+	//		printf("Got domain names\n");
+	/*		if(nameList == NULL) {
 			printf("empty nameList %d\n", mmsError);
 			return 0;
-		}
-*/
+			}
+	 */
 	//	LinkedList_printStringList(nameList);
 
 	/*	
 		while((nameList = LinkedList_getNext(nameList)) != NULL){
-			char *str = (char *) (nameList->data);
-			printf("%s\n", str);
+		char *str = (char *) (nameList->data);
+		printf("%s\n", str);
 		}*/
 	}else {
 		printf("erro de conexão %d %d", indication, mmsError);
 	}
-	
+
 	MmsConnection_destroy(con);
 	return 0;
 }
