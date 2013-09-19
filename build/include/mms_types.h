@@ -26,6 +26,7 @@
 
 #include "libiec61850_platform_includes.h"
 #include "ber_integer.h"
+#include "mms_common.h"
 
 typedef enum {
 	MMS_VALUE_OK,

@@ -1,5 +1,19 @@
+
 #ifndef CLIENT_H_INCLUDED
 #define CLIENT_H_INCLUDED
+
+#include <time.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <malloc.h>
+#include <signal.h>
+#include "mms_client_connection.h"
+#include "client.h"
+
 
 #define INDEX_OFFSET 3
 #define RULE2_ANALOG_REPORT_SIZE 7

@@ -23,6 +23,7 @@
 
 #ifndef HAL_C_
 #define HAL_C_
+#include "platform_types.h"
 
 /*! \addtogroup hal
    *
