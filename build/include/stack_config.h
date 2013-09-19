@@ -15,7 +15,11 @@
 #define STATIC_MODEL 1
 
 /* Maximum MMS PDU SIZE - default is 65000 */
-#define MMS_MAXIMUM_PDU_SIZE 65000
+//#define MMS_MAXIMUM_PDU_SIZE 65000
+//
+#define MMS_MAXIMUM_PDU_SIZE 16000
+//TODO: sage
+
 
 /* number of data sets per LN if static option is set */
 #define MMS_ALLOW_CLIENTS_TO_CREATE_ASSOCIATION_SPECIFIC_DATASETS 0

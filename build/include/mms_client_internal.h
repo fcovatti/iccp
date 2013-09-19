@@ -95,6 +95,9 @@ mmsClient_createInitiateRequest(MmsConnection self, ByteBuffer* writeBuffer);
 MmsPdu_t*
 mmsClient_createConfirmedRequestPdu(long invokeId);
 
+MmsPdu_t*
+mmsClient_createUnconfirmedPdu(void);
+
 int
 mmsClient_createMmsGetNameListRequestVMDspecific(long invokeId, ByteBuffer* writeBuffer, char* continueAfter);
 
@@ -152,6 +155,11 @@ mmsClient_parseWriteResponse(ByteBuffer* message);
 int
 mmsClient_createWriteRequest(long invokeId, char* domainId, char* itemId, MmsValue* value,
 		ByteBuffer* writeBuffer);
+
+int
+mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp,
+		ByteBuffer* writeBuffer);
+
 
 void
 mmsClient_createDefineNamedVariableListRequest(uint32_t invokeId, ByteBuffer* writeBuffer,

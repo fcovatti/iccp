@@ -8,138 +8,144 @@
 #include <malloc.h>
 #include <signal.h>
 #include "mms_client_connection.h"
-//report handler
+
+#define INDEX_OFFSET 3
+#define RULE2_ANALOG_REPORT_SIZE 7
+#define RULE2_DIGITAL_REPORT_SIZE 9
+#define DATASET_MAX_SIZE 500
+#define DATASET_MAX_NUMBER 150
+#define DATASET_NAME_SIZE 7
+//#define DATASET_INTEGRITY_TIME 1800
+//#define DATASET_BUFFER_INTERVAL 1
+#define DATASET_BUFFER_INTERVAL 1
+#define DATASET_INTEGRITY_TIME 2
+#define TRANSFERSET_NAME_SIZE 13
+
+#define IDICCP "COS_A"
+#define SERVER_NAME "cems1"
+#define CONFIG_FILE "sage_id_no_155.txt"
+#define CONFIG_LOG "iccp_config.log"
+#define DATA_LOG "iccp_data.log"
+
+#define CLIENT_DEBUG 1
 
 typedef struct {
 	unsigned int nponto;
-	char id[22];
+	char id[23];
 	char type;
+	float f;
+	char  state;
+	int time_stamp;
 } data_config;
+
+typedef struct {
+	char id[DATASET_NAME_SIZE];
+	char ts[TRANSFERSET_NAME_SIZE];
+} dataset_config;
 
 typedef union {
 	float f;
 	char  s[4];
 } float_data;
 
-//static int rptCount = 0;
+typedef union {
+	unsigned int t;
+	char  s[4];
+} time_data;
+
 
 static int running = 1;
 
-static char * IDICCP = "COS_A";
-static char * DS_DIG = "ds_001_dig";
-static char * DS_ANA = "ds_001_anl";
-static char * config_file = "sage_id_no_155.txt";
-static char * config_log = "iccp_config.log";
-#define INDEX_OFFSET 3
-#define ANALOG_REPORT_SIZE 8
-#define DIGITAL_REPORT_SIZE 10
-
 //Configuration
-int num_of_ids = 0;	
-data_config * configuration = NULL;
+static int num_of_ids = 0;	
+static int num_of_datasets = 0;
+static data_config * configuration = NULL;
+static dataset_config * dataset_conf = NULL;
 
-static void print_value (MmsValue * value, bool ana, time_t time_stamp) {
+#ifdef CLIENT_DEBUG
+static void print_value (char state, bool ana, time_t time_stamp) {
+	struct tm * time_result;
+	MmsValue * value = MmsValue_newBitString(8);
+	memcpy(value->value.bitString.buf, &state, 1);
 
-			struct tm * time_result;
-/*	printf("State_hi %d State_lo %d, Validity_hi %d, Validity_lo %d, CurrentSource_hi %d, CurrentSource_lo %d, NormalValue %d, TimeStampQuality %d \n", 
-				MmsValue_getBitStringBit(value,0),
-				MmsValue_getBitStringBit(value,1),
-				MmsValue_getBitStringBit(value,2),
-				MmsValue_getBitStringBit(value,3),
-				MmsValue_getBitStringBit(value,4),
-				MmsValue_getBitStringBit(value,5),
-				MmsValue_getBitStringBit(value,6),
-				MmsValue_getBitStringBit(value,7) );
-*/
+	//DEBUG
+	/*	printf("State_hi %d State_lo %d, Validity_hi %d, Validity_lo %d, CurrentSource_hi %d, CurrentSource_lo %d, NormalValue %d, TimeStampQuality %d \n", 
+		MmsValue_getBitStringBit(value,0), MmsValue_getBitStringBit(value,1), MmsValue_getBitStringBit(value,2),
+		MmsValue_getBitStringBit(value,3), MmsValue_getBitStringBit(value,4), MmsValue_getBitStringBit(value,5),
+		MmsValue_getBitStringBit(value,6), MmsValue_getBitStringBit(value,7) );
+	 */
 	if (!ana) {
 		//ESTADO
 		if (MmsValue_getBitStringBit(value,0) && !MmsValue_getBitStringBit(value,1)) {
-			printf("Estado Ligado |");
+			printf("Ligado    |");
 		}else if (!MmsValue_getBitStringBit(value,0) && MmsValue_getBitStringBit(value,1)) {
-			printf("Estado Desligado |");
+			printf("Desligado |");
 		} else {
-			printf ("Estado Invalido |");
+			printf ("Invalido |");
 		}
 	}
 
-		//Validade
-		if (!MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
-			printf("Valido |");
-		}else if (!MmsValue_getBitStringBit( value,2) && MmsValue_getBitStringBit(value,3)) {
-			printf("Segurado (Held) |");
-		}else if (MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
-			printf("Suspeito (Suspect) |");
-		} else {
-			printf ("Inválido |");
-		}
-
-		// Origem
-		if (!MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
-			printf("Telemedido |");
-		}else if (!MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
-			printf("Calculado |");
-		}else if (MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
-			printf("Manual |");
-		} else {
-			printf ("Estimado |");
-		}
-
-		// Valor Normal
-		if (!MmsValue_getBitStringBit(value,6)){
-			printf ("Normal |");
-		} else {
-			printf ("Anormal |");
-		}
-
-		// Estampa de tempo
-		if (!MmsValue_getBitStringBit(value,7)){
-			printf ("Estampa de t Valida |");
-		} else {
-			printf ("Estampa de t Invalida |");
-		}
-
-		time_result = localtime(&time_stamp);
-		printf("TimeStamp %s ", asctime(time_result));
-
-}
-
-static int handle_analog_state(MmsValue * analog_value,int index,time_t time_stamp ){
-	MmsValue* value;
-
-	if(analog_value == NULL){
-		printf("Error null analog value\n");
-		return -1;
-	}
-	//First element Floating Point Value
-	value = MmsValue_getElement(analog_value, 0);
-	if(value == NULL) {
-		printf("could not get floating point value\n");
-		return -1;
+	//Validade
+	if (!MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
+		printf("Valido   |");
+	}else if (!MmsValue_getBitStringBit( value,2) && MmsValue_getBitStringBit(value,3)) {
+		printf("Segurado |");
+	}else if (MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
+		printf("Suspeito |");
 	} else {
-		printf("%s: %.2f |", configuration[index].id, MmsValue_toFloat(value));
-
+		printf("Inválido |");
 	}
 
-	//Second Element BitString data state
-	value = MmsValue_getElement(analog_value, 1);
-	if(value == NULL) {
-		printf("could not get analog state\n");
-		return -1;
+	// Origem
+	if (!MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
+		printf("Telemedido |");
+	}else if (!MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
+		printf("Calculado  |");
+	}else if (MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
+		printf("Manual     |");
+	} else {
+		printf ("Estimado  |");
 	}
-	
-	print_value(value,1, time_stamp);
 
-		return 0;
+	// Valor Normal
+	if (!MmsValue_getBitStringBit(value,6)){
+		printf ("Normal |");
+	} else {
+		printf ("Anormal |");
+	}
+
+	// Estampa de tempo
+	if (!MmsValue_getBitStringBit(value,7)){
+		printf ("T Valida |");
+	} else {
+		printf ("T Invalida |");
+	}
+
+	time_result = localtime(&time_stamp);
+	printf("%s ", asctime(time_result));
+
+}
+#endif
+
+static int handle_analog_state(float value, char state, int index,time_t time_stamp ){
+	configuration[index].f = value;
+	configuration[index].state = state;
+	configuration[index].time_stamp = time_stamp;
+#ifdef CLIENT_DEBUG	
+	printf("%23s: %04.3f |", configuration[index].id, value);
+	print_value(state,1, time_stamp);
+#endif
+	return 0;
 }
 
-static int handle_digital_state(MmsValue * value, int index, time_t time_stamp){
-	if(value == NULL){
-		printf("Error null digital state value\n");
-		return -1;
-	}
-	printf("%s: ", configuration[index].id);
-	print_value(value,0, time_stamp);
-		return 0;
+static int handle_digital_state(char state, int index, time_t time_stamp){
+	configuration[index].state = state;
+	configuration[index].time_stamp = time_stamp;
+#ifdef CLIENT_DEBUG	
+	printf("%23s: ", configuration[index].id);
+	print_value(state,0, time_stamp);
+#endif
+	return 0;
 }
 
 
@@ -148,11 +154,16 @@ static void sigint_handler(int signalId)
 	running = 0;
 }
 
-static int read_data_set(MmsConnection con, char * ds_name, bool ana){
+static int read_data_set(MmsConnection con, char * ds_name, bool ana, int offset){
 	MmsValue* dataSet;
 	MmsClientError mmsError;
 	int i;
-	int number_of_variables = 25; //TODO get from config file
+	int number_of_variables = DATASET_MAX_SIZE; 
+
+	//LASTA DATA SET HAS A SMALLER NUMBER
+	if ( (offset+1) == num_of_datasets) {
+		number_of_variables = num_of_ids - (DATASET_MAX_SIZE*offset);
+	}
 	dataSet = MmsConnection_readNamedVariableListValues(con, &mmsError, IDICCP, ds_name, 0);
 	if (dataSet == NULL){
 		printf("reading value failed! %d\n", mmsError);                                                                                                   
@@ -165,15 +176,37 @@ static int read_data_set(MmsConnection con, char * ds_name, bool ana){
 			time_t time_stamp;
 
 			//GET DATASET VALUES (FIRST 3 VALUES ARE ACCESS-DENIED)
-			dataSetValue = MmsValue_getElement(dataSet, 3+i);
+			dataSetValue = MmsValue_getElement(dataSet, INDEX_OFFSET+i);
 			if(dataSetValue == NULL) {
-				printf("could not get DATASET values\n");
+				printf("could not get DATASET values offset %d element %d %d \n",offset, i, number_of_variables);
 				return -1;
 			}
 
-			if(configuration[i].type == 'A'){
+			if(configuration[i +(offset*DATASET_MAX_SIZE)].type == 'A'){
+				MmsValue* analog_value;
+				float analog_data;
+				char analog_state;
+
+				//First element Floating Point Value
+				analog_value = MmsValue_getElement(dataSetValue, 0);
+				if(analog_value == NULL) {
+					printf("could not get floating point value\n");
+					return -1;
+				} 
+
+				analog_data = MmsValue_toFloat(analog_value);
+
+				//Second Element BitString data state
+				analog_value = MmsValue_getElement(dataSetValue, 1);
+				if(analog_value == NULL) {
+					printf("could not get analog state\n");
+					return -1;
+				} 
+				
+				analog_state = analog_value->value.bitString.buf[0];
 				time( &time_stamp);
-				handle_analog_state(dataSetValue, i, time_stamp);
+
+				handle_analog_state(analog_data, analog_state, i +(offset*DATASET_MAX_SIZE), time_stamp);
 			}else {
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
@@ -195,7 +228,7 @@ static int read_data_set(MmsConnection con, char * ds_name, bool ana){
 					printf("could not get digital DataState\n");
 					return -1;
 				}
-				handle_digital_state(dataSetElem, i, time_stamp);
+				handle_digital_state(dataSetElem->value.bitString.buf[0], i +(offset*DATASET_MAX_SIZE), time_stamp);
 			}
 			MmsValue_delete(dataSetValue); 
 
@@ -204,7 +237,7 @@ static int read_data_set(MmsConnection con, char * ds_name, bool ana){
 	}
 	return 0;
 }
-static void write_data_set(MmsConnection con, char * ds_name, char * ts_name) {
+static void write_data_set(MmsConnection con, char * ds_name, char * ts_name, int index) {
 	//global
 	MmsClientError mmsError;
 	MmsTypeSpecification typeSpec;
@@ -343,12 +376,14 @@ static void write_data_set(MmsConnection con, char * ds_name, char * ts_name) {
 	MmsValue_setInt32(elem, 0);
 
 	//4
+	//Buffer interval
 	elem = MmsValue_getElement(dataset, 4);
-	MmsValue_setInt32(elem, 1);
+	MmsValue_setInt32(elem, DATASET_BUFFER_INTERVAL);
 
 	//5
+	//Integrity check time
 	elem = MmsValue_getElement(dataset, 5);
-	MmsValue_setInt32(elem, 1800);
+	MmsValue_setInt32(elem, DATASET_INTEGRITY_TIME);
 
 	// 6
 	elem = MmsValue_getElement(dataset, 6);
@@ -368,7 +403,9 @@ static void write_data_set(MmsConnection con, char * ds_name, char * ts_name) {
 	MmsValue_setBoolean(elem, true);
 
 	//10
+	//RBE?
 	elem = MmsValue_getElement(dataset, 10);
+	//MmsValue_setBoolean(elem, false);
 	MmsValue_setBoolean(elem, true);
 
 	//11
@@ -379,15 +416,16 @@ static void write_data_set(MmsConnection con, char * ds_name, char * ts_name) {
 	elem = MmsValue_getElement(dataset, 12);
 	MmsValue_setInt32(elem, 0);
 
-	MmsConnection_writeVariable(con, &mmsError, IDICCP, "COS_A_ts_001", dataset );
+	MmsConnection_writeVariable(con, &mmsError, IDICCP, ts_name, dataset );
 }
 
-static void create_data_set(MmsConnection con, char * ds_name, bool ana)
+static void create_data_set(MmsConnection con, char * ds_name, bool ana, int offset)
 {
 	MmsClientError mmsError;
 	int i=0;
 	LinkedList variables = LinkedList_create();
 
+	printf("create_data_Set %d\n", offset);
 	MmsVariableSpecification * var; 
 	MmsVariableSpecification * name = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Name");
 	MmsVariableSpecification * ts   = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Time_Stamp");
@@ -396,7 +434,7 @@ static void create_data_set(MmsConnection con, char * ds_name, bool ana)
 	LinkedList_add(variables, ts);
 	LinkedList_add(variables, ds);
 
-	for (i = 0; i<25;i++){
+	for (i = DATASET_MAX_SIZE*offset; (i<DATASET_MAX_SIZE*(offset+1)) &&( i < num_of_ids);i++){
 		var = MmsVariableSpecification_create (IDICCP, configuration[i].id);
 		var->arrayIndex = 0;	
 		LinkedList_add(variables, var);
@@ -449,117 +487,215 @@ static MmsValue * get_next_transfer_set(MmsConnection con)
 	MmsValue_delete(value); 
 	return returnValue;
 }
+/*
+static MmsValue * createAnalogValue(float data, char bitstring) {
+	MmsValue* analog_data = NULL;
+	MmsTypeSpecification typeSpec;
+	typeSpec.type = MMS_STRUCTURE;
+	typeSpec.typeSpec.structure.elementCount = 2;
+	typeSpec.typeSpec.structure.elements = calloc(2,
+			sizeof(MmsTypeSpecification*));
+	MmsTypeSpecification* element;
+
+	element = calloc(1, sizeof(MmsTypeSpecification));
+	element->typeSpec.floatingpoint.formatWidth = 32;
+	element->typeSpec.floatingpoint.exponentWidth = 8;
+	element->type = MMS_FLOAT;
+	typeSpec.typeSpec.structure.elements[0] = element;
+
+	element = calloc(1, sizeof(MmsTypeSpecification));
+	element->typeSpec.bitString = 5;
+	element->type = MMS_BIT_STRING;
+	typeSpec.typeSpec.structure.elements[1] = element;
+
+	analog_data = MmsValue_newStructure(&typeSpec);
+
+	MmsValue* elem;
+
+	elem = MmsValue_getElement(analog_data, 0);
+	MmsValue_setFloat(elem,data_value.f);
+
+	elem = MmsValue_getElement(analog_data, 1);
+	memcpy(elem->value.bitString.buf,bitstring, 1);
+	elem->value.bitString.size = 5;
+	return analog_data;
+}
+*/
 static void
 informationReportHandler (void* parameter, char* domainName, char* variableListName, MmsValue* value, LinkedList attributes, int attributesCount)
 {
+	int offset = 0;
 	int i = 0;
 	time_t time_stamp;
 	time(&time_stamp);
+	char * domain_id = NULL;
+	char * transfer_set = NULL;
+	MmsClientError mmsError;
+	int octet_offset = 0;
+
 	printf("*************Information Report Received********************\n");
 	if (value != NULL && attributes != NULL && attributesCount) {
 		//printf("received report no %i, attributesCount %d: ", rptCount++, attributesCount);
 		LinkedList list_names	 = LinkedList_getNext(attributes);
 		while (list_names != NULL) {
 			char * attribute_name = (char *) list_names->data;
-			//printf("Attributes %s\n", attribute_name);
 			list_names = LinkedList_getNext(list_names);
 			MmsValue * dataSetValue = MmsValue_getElement(value, i);
 			
-			/*if(dataSetValue != NULL){
+			/*DEBUG
+			if(dataSetValue != NULL){
 				printf ("data set type %d , %d\n",dataSetValue->type, i);
 			}*/
-			if (strcmp("Transfer_Set_Time_Stamp", attribute_name) == 0) {
 
-				time_stamp =  MmsValue_toUint32(dataSetValue);
-
-			}
-			if (strcmp(DS_DIG, attribute_name) == 0) {
-				if(dataSetValue != NULL){
-					if (dataSetValue->value.octetString.buf != NULL) {
-						
-						//DEBUG
-						/*
-						int j;
-						for (j=0; j < dataSetValue->value.octetString.size; j ++){
-							printf(" %x", dataSetValue->value.octetString.buf[j]);
-						}
-						printf("\n"); */
-						// create MmsValue
-						if (configuration[dataSetValue->value.octetString.buf[2]-INDEX_OFFSET].type == 'D') {
-							if(dataSetValue->value.octetString.size != DIGITAL_REPORT_SIZE) {
-								printf("Wrong size of digital report %d\n",dataSetValue->value.octetString.size );
-								return;
-							}
-							MmsValue * digital_state = MmsValue_newBitString(8);
-							memcpy(digital_state->value.bitString.buf, &dataSetValue->value.octetString.buf[dataSetValue->value.octetString.size-1], 1);
-							handle_digital_state(digital_state, dataSetValue->value.octetString.buf[2]-INDEX_OFFSET, time_stamp);
-						} else if (configuration[dataSetValue->value.octetString.buf[2]-INDEX_OFFSET].type == 'A'){
-							float_data data_value;
-							if(dataSetValue->value.octetString.size != ANALOG_REPORT_SIZE) {
-								printf("Wrong size of analog report %d\n",dataSetValue->value.octetString.size );
-								return;
-							}
-							//char float_string[5];
-							data_value.s[3] = dataSetValue->value.octetString.buf[3];
-							data_value.s[2] = dataSetValue->value.octetString.buf[4];
-							data_value.s[1] = dataSetValue->value.octetString.buf[5];
-							data_value.s[0] = dataSetValue->value.octetString.buf[6];
-
-							//printf("Report id %s, float %f size %ld\n",configuration[dataSetValue->value.octetString.buf[2]-INDEX_OFFSET].id, data_value.f , sizeof(float));
-							//MmsValue * analog_value = MmsValue_newFloat(data_value.f);
-							//MmsValue * analog_state = MmsValue_newBitString(dataSetValue->value.octetString.buf[7]);
-
-							MmsTypeSpecification typeSpec;
-							typeSpec.type = MMS_STRUCTURE;
-							typeSpec.typeSpec.structure.elementCount = 2;
-							typeSpec.typeSpec.structure.elements = calloc(2,
-									sizeof(MmsTypeSpecification*));
-							MmsTypeSpecification* element;
-
-							element = calloc(1, sizeof(MmsTypeSpecification));
-							element->typeSpec.floatingpoint.formatWidth = 32;
-							element->typeSpec.floatingpoint.exponentWidth = 8;
-							element->type = MMS_FLOAT;
-							typeSpec.typeSpec.structure.elements[0] = element;
-
-							element = calloc(1, sizeof(MmsTypeSpecification));
-							element->typeSpec.bitString = 5;
-							element->type = MMS_BIT_STRING;
-							typeSpec.typeSpec.structure.elements[1] = element;
-
-
-							MmsValue* analog_data = MmsValue_newStructure(&typeSpec);
-
-							MmsValue* elem;
-													
-							elem = MmsValue_getElement(analog_data, 0);
-							MmsValue_setFloat(elem,data_value.f);
-
-							elem = MmsValue_getElement(analog_data, 1);
-							memcpy(elem->value.bitString.buf, &dataSetValue->value.octetString.buf[7], 1);
-							elem->value.bitString.size = 5;
-							
-							handle_analog_state(analog_data, dataSetValue->value.octetString.buf[2]-INDEX_OFFSET, time_stamp);
-						} else {
-							printf("unkonwn information report\n");
-						}
+			if (strcmp("Transfer_Set_Name", attribute_name) == 0) {
+				MmsValue* ts_name;
+				MmsValue* d_id;
+				if(dataSetValue !=NULL) {
+					d_id = MmsValue_getElement(dataSetValue, 1);
+					if(d_id !=NULL) {
+						domain_id = MmsValue_toString(d_id);
 					} else {
-						printf("empty bitstring\n");
+						printf("Empty domain id on report\n");
+					}
+					ts_name = MmsValue_getElement(dataSetValue, 2);
+					if(ts_name !=NULL) {
+						transfer_set = MmsValue_toString(ts_name);
+					} else {
+						printf("Empty transfer set name on report\n");
 					}
 				} else {
-					printf(" NULL Element\n");
-				}
-			}else if (strcmp(DS_ANA, attribute_name) == 0) {
-				printf("Received analog report\n");
-				if(dataSetValue != NULL){
-					printf ("data set type %d , %d\n",dataSetValue->type, i);
-				}
+					printf("Empty data for transfer set report\n");
+				}					
+				i++;
+				continue;
 			}
+			if (strcmp("Transfer_Set_Time_Stamp", attribute_name) == 0) {
+				time_stamp =  MmsValue_toUint32(dataSetValue);
+				i++;
+				continue;
+			}
+			for (offset=0; offset<num_of_datasets;offset++) {
+				if (strcmp(attribute_name,dataset_conf[offset].id) == 0) {
+					if(dataSetValue != NULL){
+						if (dataSetValue->value.octetString.buf != NULL) {
+							short index = 0;	
+							
+							//DEBUG
+							   /*int j;
+							   for (j=0; j < dataSetValue->value.octetString.size; j ++){
+							   printf(" %x", dataSetValue->value.octetString.buf[j]);
+							   }
+							   printf("\n"); */
+						
+							if(dataSetValue->value.octetString.buf[0] == 0) {
+								if(dataSetValue->value.octetString.size == 0) {
+									printf("Error - empty octetString\n");
+									return;
+								}
 
-			i++;
+								octet_offset = 1; //first byte is the rule
+								index = offset*DATASET_MAX_SIZE; // config index
 
-		}
+								while (octet_offset < dataSetValue->value.octetString.size){
+									if (configuration[index].type == 'D') {
+										time_data time_value;
+										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										octet_offset = octet_offset + 7;
+									}else if (configuration[index].type == 'A') {
+										float_data data_value;
+										data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+										octet_offset = octet_offset + 5;
+									} else {
+										printf("wrong index %d\n", index);
+										return;
+									}
+									index++;
+								}
+
+								//RULE 0
+								//TODO: implement rule 0 handling
+							} 
+							if(dataSetValue->value.octetString.buf[0] == 1) {
+								//RULE 1 - not implemented
+								printf("Error - Information Report with rule 1 received\n");
+								return;
+							}
+							else if (dataSetValue->value.octetString.buf[0] == 2) {
+								//RULE 2
+								if(dataSetValue->value.octetString.size == 0) {
+									printf("Error - empty octetString\n");
+									return;
+								}
+
+								octet_offset = 1; //first byte is the rule
+
+								while (octet_offset < dataSetValue->value.octetString.size){
+									// Packet INDEX
+									index = dataSetValue->value.octetString.buf[octet_offset]<<8 | (dataSetValue->value.octetString.buf[octet_offset+1]-INDEX_OFFSET);
+									// Translate into configuration index
+									index = index + (offset*DATASET_MAX_SIZE);
+									if (configuration[index].type == 'D') {
+										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
+											printf("Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											return;
+										}
+										time_data time_value;
+										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
+										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
+										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
+										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
+										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
+									} else if (configuration[index].type == 'A'){
+										float_data data_value;
+										if(dataSetValue->value.octetString.size < (RULE2_ANALOG_REPORT_SIZE + octet_offset)) {
+											printf("Wrong size of analog report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											return;
+										}
+										//char float_string[5];
+										data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
+										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
+										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
+										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
+
+										//MmsValue * analog_data = createAnalogValue(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6]);
+
+										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
+
+										octet_offset = octet_offset + RULE2_ANALOG_REPORT_SIZE;
+									} else {
+										printf("unkonwn information report index %d\n", index);
+										int j;
+										for (j=0; j < dataSetValue->value.octetString.size; j ++){
+											printf(" %x", dataSetValue->value.octetString.buf[j]);
+										}
+										printf("\n"); 
+										return;
+									}
+								}
+							}
+							} else {
+								printf("empty bitstring\n");
+							}
+						} else {
+							printf(" NULL Element\n");
+						}
+					}
+				}
+				i++;
+			}
 		printf("\n");
+
+		//CONFIRM RECEPTION OF EVENT
+		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
 	} else{
 		printf("wrong report\n");
 	}
@@ -613,28 +749,23 @@ static int read_configuration() {
 	FILE * log_file;
 	char line[300];
 
-	printf("alloced configuration\n");
-	configuration = malloc(sizeof(data_config)*100000); //100.000 pontos
+	configuration = malloc(sizeof(data_config)*DATASET_MAX_SIZE*DATASET_MAX_NUMBER); 
 
-	file = fopen(config_file, "r");
+	file = fopen(CONFIG_FILE, "r");
 	if(file==NULL){
-		printf("Error, cannot open configuration file %s\n", config_file);
+		printf("Error, cannot open configuration file %s\n", CONFIG_FILE);
 		return -1;
 	} else{
 		while ( fgets(line, 300, file)){
-			if(fscanf(file, "%d %*d %s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
+			if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
 				break;
 			num_of_ids++;
 		}
 	}
 
-	printf("scaned configuration\n");
-	//replace caracthers
-	//
-
-	log_file = fopen(config_log, "w");
+	log_file = fopen(CONFIG_LOG, "w");
 	if(log_file==NULL){
-		printf("Error, cannot open configuration log file %s\n", config_log);
+		printf("Error, cannot open configuration log file %s\n", CONFIG_LOG);
 		return -1;
 	} 
 	int i,j;
@@ -647,81 +778,98 @@ static int read_configuration() {
 		fprintf(log_file, "%d \t%s\t %c\n", configuration[j].nponto,  configuration[j].id, configuration[j].type);
 	}
 
-	printf("finisherd configuration\n");
+	num_of_datasets = num_of_ids/DATASET_MAX_SIZE;
+	if(num_of_ids%DATASET_MAX_SIZE)
+		num_of_datasets++;
+
+	//alloc data for datasets
+	dataset_conf = malloc(sizeof(dataset_config)*num_of_datasets);
+	
+	for (i=0; i < num_of_datasets; i++) {
+		snprintf(dataset_conf[i].id, DATASET_NAME_SIZE, "ds_%03d", i);
+	}
 	fclose(file);
 	fclose(log_file);
 	return 0;
 }
+
 int main (int argc, char ** argv){
+	int i = 0;
+	int loop_error = 0;
 	MmsClientError mmsError;
 	MmsConnection con = MmsConnection_create();
 		signal(SIGINT, sigint_handler);
 
-	//READ CONFIGURATION FILE
+	// READ CONFIGURATION FILE
 	if (read_configuration(configuration, &num_of_ids) != 0) {
 		printf("Error reading configuration\n");
 		return -1;
 	} else {
-		printf("Start configuration with %d points\n", num_of_ids);
+		printf("Start configuration with %d points and %d datasets\n", num_of_ids, num_of_datasets);
 	}
 
-	//INITIALIZE Connection
-	MmsIndication indication = MmsConnection_connect(con, &mmsError, "cems1", 102);
+	//INITIALIZE CONNECTION
+	MmsIndication indication = MmsConnection_connect(con, &mmsError, SERVER_NAME, 102);
 	if (indication == MMS_OK){
-		printf("Conexão OK!!!\n");
+		printf("Connection OK!!!\n");
 
 		// DELETE DATASETS WHICH WILL BE USED
-		MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, DS_DIG);
-		//MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, DS_ANA);
+		for (i=0; i < num_of_datasets; i++) {
+			MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
+		}
 
 		// CREATE TRASNFERSETS ON REMOTE SERVER	
-		MmsValue *transfer_set_dig  = get_next_transfer_set(con);
-		if( transfer_set_dig == NULL) {	
-			printf("Could not create transfer set for digital data\n");
-			return -1;
-		} else {
-			printf("New transfer set %s\n",MmsValue_toString(transfer_set_dig));
-		}
-		/*MmsValue *transfer_set_ana  = get_next_transfer_set(con);
-		if( transfer_set_ana == NULL) {	
-			printf("Could not create transfer set for analog data\n");
-			return -1;
-		}else {
-			printf("New transfer set %s\n", MmsValue_toString(transfer_set_ana));
-		}*/
-
-		// CREATE DATASETS WITH CUSTOM VARIABLES
-		create_data_set(con, DS_DIG, 0);
-		//create_data_set(con, DS_ANA, 1);
-
-		//WRITE DATASETS TO TRANSFERSET
-		write_data_set(con, DS_DIG, MmsValue_toString(transfer_set_dig));
-		//write_data_set(con, DS_ANA, MmsValue_toString(transfer_set_ana));
-
-		// READ VARIABLES
-		printf("*************Reading Digital Values********************\n");
-		read_data_set(con, DS_DIG, 0);
-
-		printf("*************Reading Analog Values********************\n");
-		//read_data_set(con, DS_ANA, 1);
-
-		// HANDLE REPORTS
-		MmsConnection_setInformationReportHandler(con, informationReportHandler, NULL);
+		for (i=0; i < num_of_datasets; i++){
+			MmsValue *transfer_set_dig  = get_next_transfer_set(con);
+			if( transfer_set_dig == NULL) {	
+				printf("Could not create transfer set for digital data\n");
+				return -1;
+			} else {
+				strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
+				printf("New transfer set %s\n",dataset_conf[i].ts);
+			}
+		}	
 		
-		//LOOP TO MANTAIN CONNECTION	
+		// CREATE DATASETS WITH CUSTOM VARIABLES
+		for (i=0; i < num_of_datasets; i++){
+			create_data_set(con, dataset_conf[i].id, 0, i);
+		}
+		// WRITE DATASETS TO TRANSFERSET
+		for (i=0; i < num_of_datasets; i++){
+			write_data_set(con, dataset_conf[i].id, dataset_conf[i].ts, i);
+		}
+		// READ VARIABLES
+		printf("*************Reading DS Values********************\n");
+		for (i=0; i < num_of_datasets; i++){
+			read_data_set(con, dataset_conf[i].id, 0, i);
+		}
+		// HANDLE REPORTS
+		MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
+		
+		// LOOP TO MANTAIN CONNECTION ACTIVE	
 		MmsValue* loop_value;
 		while(running) {
 			loop_value = MmsConnection_readVariable(con, &mmsError, IDICCP, "Bilateral_Table_ID");
 			if (loop_value == NULL){ 
-				printf("reading value failed! %d\n", mmsError);                                                                                                   
-				continue;
+				if (mmsError == MMS_ERROR_CONNECTION_LOST){
+					printf("Connection lost\n");
+					return -1;
+				}
+				loop_error++;
+				if(loop_error <3){
+					printf("loop error %d reading value - mmsError %d\n", loop_error, mmsError);
+				}else {
+					printf("aborting due to consecutive loop errors reading value - mmsError %d\n", mmsError);
+					return -1;
+				}
 			}else{                                                                                                                                     
-				sleep(1);
+				loop_error=0;
 			}
+			sleep(1);
 		}
 
 	}else {
-		printf("erro de conexão %d %d", indication, mmsError);
+		printf("Connection Error %d %d", indication, mmsError);
 	}
 
 	MmsConnection_destroy(con);

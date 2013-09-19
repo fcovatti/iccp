@@ -457,7 +457,8 @@ MmsConnection_setLocalDetail(MmsConnection self, int32_t localDetail);
 int32_t
 MmsConnection_getLocalDetail(MmsConnection self);
 
-
+MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsClientError* clientError,
+		char* domainId, char* itemId, uint32_t timeStamp);
 /**@}*/
 
 #endif /* MMS_CLIENT_CONNECTION_H_ */

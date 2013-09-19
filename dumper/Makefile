@@ -1,6 +1,6 @@
 #BDTR makefile
 
-TARGET := iccp_client
+TARGET := dumper
 TARGET_DIR := ../bin
 
 ########################################################################
