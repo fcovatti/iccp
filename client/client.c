@@ -9,7 +9,7 @@
 #include "mms_client_connection.h"
 #include "client.h"
 
-#define CLIENT_DEBUG 1
+//#define CLIENT_DEBUG 1
 
 static int running = 1;
 
@@ -18,19 +18,29 @@ static int num_of_ids = 0;
 static int num_of_datasets = 0;
 static data_config * configuration = NULL;
 static dataset_config * dataset_conf = NULL;
+static int skip_loop = 0;
+static FILE * data_file;
+static FILE * error_file;
 
-static int handle_analog_state(float value, char state, int index,time_t time_stamp ){
+static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp, char first ){
+
+	if(	(configuration[index].f != value) || (configuration[index].state != state) || first){
+		fprintf(data_file, "%22s %02X %u %.2f\n", configuration[index].id, state, (int)time_stamp, value);
+	}
 	configuration[index].f = value;
 	configuration[index].state = state;
 	configuration[index].time_stamp = time_stamp;
-#ifdef CLIENT_DEBUG	
+	#ifdef CLIENT_DEBUG	
 	printf("%23s: %04.3f |", configuration[index].id, value);
 	print_value(state,1, time_stamp);
 #endif
 	return 0;
 }
 
-static int handle_digital_state(char state, int index, time_t time_stamp){
+static int handle_digital_state(unsigned char state, int index, time_t time_stamp, char first){
+	if((configuration[index].state != state) || first){
+		fprintf(data_file, "%22s %02X %u\n", configuration[index].id, state, (int)time_stamp);
+	}
 	configuration[index].state = state;
 	configuration[index].time_stamp = time_stamp;
 #ifdef CLIENT_DEBUG	
@@ -98,7 +108,7 @@ static int read_data_set(MmsConnection con, char * ds_name, bool ana, int offset
 				analog_state = analog_value->value.bitString.buf[0];
 				time( &time_stamp);
 
-				handle_analog_state(analog_data, analog_state, i +(offset*DATASET_MAX_SIZE), time_stamp);
+				handle_analog_state(analog_data, analog_state, i +(offset*DATASET_MAX_SIZE), time_stamp, 1);
 			}else {
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
@@ -120,7 +130,7 @@ static int read_data_set(MmsConnection con, char * ds_name, bool ana, int offset
 					printf("could not get digital DataState\n");
 					return -1;
 				}
-				handle_digital_state(dataSetElem->value.bitString.buf[0], i +(offset*DATASET_MAX_SIZE), time_stamp);
+				handle_digital_state(dataSetElem->value.bitString.buf[0], i +(offset*DATASET_MAX_SIZE), time_stamp, 1);
 			}
 			MmsValue_delete(dataSetValue); 
 
@@ -362,7 +372,7 @@ static MmsValue * get_next_transfer_set(MmsConnection con)
 		return NULL;
 	} else {
 		//printf("Read transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
-		if(strcmp(MmsValue_toString(ts_elem), IDICCP) != 0){
+		if(strncmp(MmsValue_toString(ts_elem), IDICCP, sizeof(IDICCP)) != 0){
 			printf("Wrong domain id\n");
 			return NULL;
 		}
@@ -419,55 +429,68 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	int offset = 0;
 	int i = 0;
 	time_t time_stamp;
-	time(&time_stamp);
 	char * domain_id = NULL;
 	char * transfer_set = NULL;
 	MmsClientError mmsError;
 	int octet_offset = 0;
-
-	printf("*************Information Report Received********************\n");
-	if (value != NULL && attributes != NULL && attributesCount) {
+	time(&time_stamp);
+	skip_loop = 1;
+	printf("*************Information Report Received %d********************\n", attributesCount);
+	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
 		//printf("received report no %i, attributesCount %d: ", rptCount++, attributesCount);
 		LinkedList list_names	 = LinkedList_getNext(attributes);
+		printf("1\n");
 		while (list_names != NULL) {
 			char * attribute_name = (char *) list_names->data;
+			printf("2\n");
+			if(attribute_name == NULL){
+				i++;
+				fprintf (error_file, "ERROR - received report with null atribute name\n");
+				continue;
+			}
+			printf("attribute_name %s\n", attribute_name);
 			list_names = LinkedList_getNext(list_names);
+			printf("3\n");
 			MmsValue * dataSetValue = MmsValue_getElement(value, i);
-			
-			/*DEBUG
-			if(dataSetValue != NULL){
-				printf ("data set type %d , %d\n",dataSetValue->type, i);
-			}*/
-
-			if (strcmp("Transfer_Set_Name", attribute_name) == 0) {
+			printf("4\n");
+			if(dataSetValue == NULL){
+				i++;
+				fprintf (error_file, "ERROR - received report with null dataset\n");
+				continue;
+			}
+			if (strncmp("Transfer_Set_Name", attribute_name, 17) == 0) {
 				MmsValue* ts_name;
 				MmsValue* d_id;
+				printf("5\n");
 				if(dataSetValue !=NULL) {
 					d_id = MmsValue_getElement(dataSetValue, 1);
 					if(d_id !=NULL) {
 						domain_id = MmsValue_toString(d_id);
 					} else {
-						printf("Empty domain id on report\n");
+						fprintf(error_file, "ERROR - Empty domain id on report\n");
 					}
 					ts_name = MmsValue_getElement(dataSetValue, 2);
 					if(ts_name !=NULL) {
 						transfer_set = MmsValue_toString(ts_name);
 					} else {
-						printf("Empty transfer set name on report\n");
+						fprintf(error_file, "ERROR - Empty transfer set name on report\n");
 					}
 				} else {
-					printf("Empty data for transfer set report\n");
+					fprintf(error_file,"ERROR - Empty data for transfer set report\n");
 				}					
 				i++;
 				continue;
 			}
-			if (strcmp("Transfer_Set_Time_Stamp", attribute_name) == 0) {
+			printf("6\n");
+			if (strncmp("Transfer_Set_Time_Stamp", attribute_name, 23) == 0) {
+				printf("7\n");
 				time_stamp =  MmsValue_toUint32(dataSetValue);
 				i++;
 				continue;
 			}
+			printf("8\n");
 			for (offset=0; offset<num_of_datasets;offset++) {
-				if (strcmp(attribute_name,dataset_conf[offset].id) == 0) {
+				if (strncmp(attribute_name,dataset_conf[offset].id,22) == 0) {
 					if(dataSetValue != NULL){
 						if (dataSetValue->value.octetString.buf != NULL) {
 							short index = 0;	
@@ -481,7 +504,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 						
 							if(dataSetValue->value.octetString.buf[0] == 0) {
 								if(dataSetValue->value.octetString.size == 0) {
-									printf("Error - empty octetString\n");
+									fprintf(error_file, "ERROR - empty octetString\n");
+									skip_loop=0;
 									return;
 								}
 
@@ -495,7 +519,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, 0);
 										octet_offset = octet_offset + 7;
 									}else if (configuration[index].type == 'A') {
 										float_data data_value;
@@ -503,10 +527,11 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp, 0);
 										octet_offset = octet_offset + 5;
 									} else {
-										printf("wrong index %d\n", index);
+										fprintf(error_file, "ERROR - wrong index %d\n", index);
+										skip_loop=0;
 										return;
 									}
 									index++;
@@ -518,12 +543,14 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							if(dataSetValue->value.octetString.buf[0] == 1) {
 								//RULE 1 - not implemented
 								printf("Error - Information Report with rule 1 received\n");
+								skip_loop=0;
 								return;
 							}
 							else if (dataSetValue->value.octetString.buf[0] == 2) {
 								//RULE 2
 								if(dataSetValue->value.octetString.size == 0) {
-									printf("Error - empty octetString\n");
+									fprintf(error_file,"ERROR - empty octetString\n");
+									skip_loop=0;
 									return;
 								}
 
@@ -536,7 +563,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									index = index + (offset*DATASET_MAX_SIZE);
 									if (configuration[index].type == 'D') {
 										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
-											printf("Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											skip_loop=0;
 											return;
 										}
 										time_data time_value;
@@ -544,12 +572,13 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										handle_digital_state(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t, 0);
 										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
 									} else if (configuration[index].type == 'A'){
 										float_data data_value;
 										if(dataSetValue->value.octetString.size < (RULE2_ANALOG_REPORT_SIZE + octet_offset)) {
-											printf("Wrong size of analog report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											fprintf(error_file,"ERROR - Wrong size of analog report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											skip_loop=0;
 											return;
 										}
 										//char float_string[5];
@@ -560,37 +589,38 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 										//MmsValue * analog_data = createAnalogValue(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6]);
 
-										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
+										handle_analog_state(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp, 0);
 
 										octet_offset = octet_offset + RULE2_ANALOG_REPORT_SIZE;
 									} else {
-										printf("unkonwn information report index %d\n", index);
+										fprintf(error_file,"ERROR - unkonwn information report index %d\n", index);
 										int j;
 										for (j=0; j < dataSetValue->value.octetString.size; j ++){
 											printf(" %x", dataSetValue->value.octetString.buf[j]);
 										}
 										printf("\n"); 
+										skip_loop=0;
 										return;
 									}
 								}
 							}
 							} else {
-								printf("empty bitstring\n");
+								fprintf(error_file,"ERROR - empty bitstring\n");
 							}
 						} else {
-							printf(" NULL Element\n");
+							fprintf(error_file,"ERROR - NULL Element\n");
 						}
 					}
 				}
 				i++;
 			}
-		printf("\n");
-
 		//CONFIRM RECEPTION OF EVENT
 		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
 	} else{
-		printf("wrong report\n");
+		fprintf(error_file, "ERROR - wrong report %d %d %d %d\n",value != NULL, attributes != NULL , attributesCount , parameter != NULL);
 	}
+	skip_loop=0;
+	printf("*************END - Information Report Received ********************\n");
 	//TODO: free values
 }
 
@@ -689,16 +719,31 @@ static int read_configuration() {
 int main (int argc, char ** argv){
 	int i = 0;
 	int loop_error = 0;
+	int loop_count = 0;
 	MmsClientError mmsError;
+	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
-		signal(SIGINT, sigint_handler);
-
+		
 	// READ CONFIGURATION FILE
 	if (read_configuration(configuration, &num_of_ids) != 0) {
 		printf("Error reading configuration\n");
 		return -1;
 	} else {
 		printf("Start configuration with %d points and %d datasets\n", num_of_ids, num_of_datasets);
+	}
+	
+	data_file = fopen(DATA_LOG, "w");
+	if(data_file==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_LOG);
+		fclose(data_file);
+		return -1;
+	}
+
+	error_file = fopen(ERROR_LOG, "w");
+	if(error_file==NULL){
+		printf("Error, cannot open error log file %s\n", ERROR_LOG);
+		fclose(error_file);
+		return -1;
 	}
 
 	//INITIALIZE CONNECTION
@@ -742,29 +787,43 @@ int main (int argc, char ** argv){
 		// LOOP TO MANTAIN CONNECTION ACTIVE	
 		MmsValue* loop_value;
 		while(running) {
-			loop_value = MmsConnection_readVariable(con, &mmsError, IDICCP, "Bilateral_Table_ID");
-			if (loop_value == NULL){ 
-				if (mmsError == MMS_ERROR_CONNECTION_LOST){
-					printf("Connection lost\n");
-					return -1;
+			if(!skip_loop ) {
+				//if(loop_count < 20)
+				if(loop_count < 1)
+					loop_count ++;
+				else {
+					loop_count = 0;
+					loop_value = MmsConnection_readVariable(con, &mmsError, IDICCP, "Bilateral_Table_ID");
+					if (loop_value == NULL){ 
+						if (mmsError == MMS_ERROR_CONNECTION_LOST){
+							printf("Connection lost\n");
+							fclose(data_file);
+							return -1;
+						}
+						loop_error++;
+						if(loop_error <10){
+							fprintf(error_file,"WARN - loop error %d reading value - mmsError %d\n", loop_error, mmsError);
+						}else {
+							printf("aborting due to consecutive errors reading value - mmsError %d\n", mmsError);
+							//fclose(data_file);
+							//return -1;
+						}
+					}else{                                                                                                                                     
+						loop_error=0;
+					}
 				}
-				loop_error++;
-				if(loop_error <3){
-					printf("loop error %d reading value - mmsError %d\n", loop_error, mmsError);
-				}else {
-					printf("aborting due to consecutive loop errors reading value - mmsError %d\n", mmsError);
-					return -1;
-				}
-			}else{                                                                                                                                     
-				loop_error=0;
+			} else {
+				loop_count = 0;//if to skip loop due to report received, zero counter
 			}
-			sleep(1);
+			usleep(100000);//sleep 100ms
 		}
 
 	}else {
 		printf("Connection Error %d %d", indication, mmsError);
 	}
 
+	fclose(data_file);
+	fclose(error_file);
 	MmsConnection_destroy(con);
 	return 0;
 }

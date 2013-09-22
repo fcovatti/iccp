@@ -22,7 +22,7 @@
 #define DATASET_MAX_NUMBER 150
 #define DATASET_NAME_SIZE 7
 #define DATASET_BUFFER_INTERVAL 1
-#define DATASET_INTEGRITY_TIME 2
+#define DATASET_INTEGRITY_TIME 1
 #define TRANSFERSET_NAME_SIZE 13
 
 #define IDICCP "COS_A"
@@ -30,13 +30,14 @@
 #define CONFIG_FILE "sage_id_no_155.txt"
 #define CONFIG_LOG "iccp_config.log"
 #define DATA_LOG "iccp_data.log"
+#define ERROR_LOG "iccp_error.log"
 
 typedef struct {
 	unsigned int nponto;
 	char id[23];
 	char type;
 	float f;
-	char  state;
+	unsigned char state;
 	int time_stamp;
 } data_config;
 
