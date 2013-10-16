@@ -13,6 +13,8 @@ QUIET = @
 .PHONY: all clean install distclean clobber doc
 
 all:
+	$(QUIET)cp ../libiec61850-iccp/build/libiec61850.a build
+	$(QUIET)find ../libiec61850-iccp/ -name *.h -exec cp '{}' build/include \;
 	$(QUIET)for i in $(DIRS); do cd $$i; $(MAKE); cd -;done
 #	$(QUIET)find . -name "*.gch" | xargs rm
 

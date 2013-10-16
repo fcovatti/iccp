@@ -14,22 +14,61 @@
 #include "mms_client_connection.h"
 #include "client.h"
 
-
+/* Fixed defines */
+// OFFSET for the index in received reports
 #define INDEX_OFFSET 3
+
+// Size of analog data in RULE 2 Information reports
 #define RULE2_ANALOG_REPORT_SIZE 7
+
+// Size of digital data in RULE 2 Information reports 
 #define RULE2_DIGITAL_REPORT_SIZE 9
-#define DATASET_MAX_SIZE 500
-#define DATASET_MAX_NUMBER 150
+
+// name size of the standard dataset created
 #define DATASET_NAME_SIZE 7
-#define DATASET_BUFFER_INTERVAL 1
-#define DATASET_INTEGRITY_TIME 1
+
+// name size of SAGE standard transferset
 #define TRANSFERSET_NAME_SIZE 13
 
+// Max Connection errors before aborting
+#define MAX_CONNECTION_ERRORS 10
+
+// Max Reading variable error in 
+#define MAX_READ_ERRORS 10
+
+// Loop in decimal seconds
+#define LOOP_TIME_DS 20
+
+
+/* Configurable defines */
+// Time in seconds for buffering an event on a dataset before reporting to the client
+#define DATASET_BUFFER_INTERVAL 1
+
+// Time in seconds for Integrity check (configured on the remote server on initialization)
+#define DATASET_INTEGRITY_TIME 10
+
+// Max size of the dataset. IMPORTANT (bigger than 600 can cause code crash)
+#define DATASET_MAX_SIZE 500
+
+// MAx number of datasets allowed on the client
+#define DATASET_MAX_NUMBER 150
+
+// Name of the VCC on the remote server
 #define IDICCP "COS_A"
+
+// Name or IP of the remote iccp server
 #define SERVER_NAME "cems1"
+
+// Name of the configuration file
 #define CONFIG_FILE "sage_id_no_155.txt"
+
+// Name of the configuration log file
 #define CONFIG_LOG "iccp_config.log"
+
+// Name of the data received log file
 #define DATA_LOG "iccp_data.log"
+
+// Name of the error log file
 #define ERROR_LOG "iccp_error.log"
 
 typedef struct {
