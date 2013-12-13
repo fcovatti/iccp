@@ -10,7 +10,7 @@ COMMON	:= ../build/include
 
 ########################################################################
 #flags
-CFLAGS   := -O2 -Wall -Werror -Wmissing-declarations -Wmissing-prototypes
+CFLAGS   := -lefence -O2 -Wall -Werror -Wmissing-declarations -Wmissing-prototypes
 CINCLUDE := -I. -I$(INCLUDE) -I$(COMMON) 
 CLIBDIR  := ../build
 CLIBS    := -lm -pthread

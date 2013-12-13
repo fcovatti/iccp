@@ -279,6 +279,22 @@ MmsConnection_writeVariable(MmsConnection self, MmsClientError* mmsError,
         char* domainId, char* itemId, MmsValue* value);
 
 /**
+ * Write multiple variables to the server.
+ *
+ * \param self MmsConnection instance to operate on
+ * \param mmsError user provided variable to store error code
+ * \param domainId the domain name of the variables to be written
+ * \param itemsId names of the variables to be written
+ * \param values values of the variables to be written
+ *
+ * \return MMS_OK on success. MMS_ERROR if the write attempt failed.
+ */
+MmsIndication
+MmsConnection_writeListVariable(MmsConnection self, MmsClientError* clientError,
+		char* domainId, LinkedList itemsId,
+		MmsValue* values);
+
+/**
  * Get the variable access attributes of a MMS named variable of the server
  *
  * \param self MmsConnection instance to operate on

@@ -157,6 +157,9 @@ mmsClient_createWriteRequest(long invokeId, char* domainId, char* itemId, MmsVal
 		ByteBuffer* writeBuffer);
 
 int
+mmsClient_createWriteListRequest(long invokeId, char* domainId, LinkedList itemsId, MmsValue* values,
+		ByteBuffer* writeBuffer);
+int
 mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp,
 		ByteBuffer* writeBuffer);
 
