@@ -178,9 +178,10 @@ void write_data_set(MmsConnection con, char * ds_name, char * ts_name, int buffe
 
 	//10
 	//RBE?
+	//TODO: if true send notification if lost event
 	elem = MmsValue_getElement(dataset, 10);
-	//MmsValue_setBoolean(elem, false);
-	MmsValue_setBoolean(elem, true);
+	MmsValue_setBoolean(elem, false);
+	//MmsValue_setBoolean(elem, true);
 
 	//11
 	elem = MmsValue_getElement(dataset, 11);

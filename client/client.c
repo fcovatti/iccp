@@ -11,7 +11,7 @@
 #include "util.h"
 #include "config.h"
 
-//#define CLIENT_DEBUG 1
+#define CLIENT_DEBUG 1
 
 static int running = 1;
 
@@ -134,7 +134,7 @@ static int read_data_set(MmsConnection con, char * ds_name, int offset){
 			//GET DATASET VALUES (FIRST 3 VALUES ARE ACCESS-DENIED)
 			dataSetValue = MmsValue_getElement(dataSet, INDEX_OFFSET+i);
 			if(dataSetValue == NULL) {
-				fprintf(error_file, "ERROR - could not get DATASET values offset %d element %d %d \n",offset, i, number_of_variables);
+				fprintf(error_file, "ERROR - could not get DATASET values offset %d element %d %d \n",offset, idx, number_of_variables);
 				return -1;
 			}
 
@@ -249,7 +249,7 @@ static void create_data_set(MmsConnection con, char * ds_name, int offset)
 	int last = 0;
 	LinkedList variables = LinkedList_create();
 
-	printf("create_data_Set %d\n", offset);
+	//printf("create_data_Set %d\n", offset);
 	MmsVariableSpecification * var; 
 	MmsVariableSpecification * name = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Name");
 	MmsVariableSpecification * ts   = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Time_Stamp");
@@ -319,7 +319,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	MmsClientError mmsError;
 	int octet_offset = 0;
 	time(&time_stamp);
-	//printf("*************Information Report Received %d********************\n", attributesCount);
+	printf("*************Information Report Received %d********************\n", attributesCount);
 	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
 		LinkedList list_names	 = LinkedList_getNext(attributes);
 		while (list_names != NULL) {
@@ -386,6 +386,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 						
 							if(dataSetValue->value.octetString.buf[0] == 0) {
 
+
 								if(dataSetValue->value.octetString.size == 0) {
 									fprintf(error_file, "ERROR - empty octetString\n");
 									return;
@@ -402,7 +403,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
 										octet_offset = octet_offset + 7;
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
 										time_data time_value;
@@ -410,20 +411,20 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_event_report(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
 										octet_offset = octet_offset + 7;
-									} else if(dataset_conf[offset].type == DATASET_DIGITAL){
+									} else if(dataset_conf[offset].type == DATASET_ANALOG){
 										float_data data_value;
 										data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
 										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_analog_report(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+										handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
 										octet_offset = octet_offset + 5;
 									} else if(dataset_conf[offset].type == DATASET_COMMANDS){
 										printf("command no report\n");
 									} else {
-										fprintf(error_file, "ERROR - wrong index %d\n", index);
+										fprintf(error_file, "ERROR - wrong index %d\n", offset);
 										return;
 									}
 									index++;
@@ -464,7 +465,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-										handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
 										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
 
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
@@ -479,7 +480,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
 										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
 										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-										handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										handle_event_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
 										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
 										float_data data_value;
@@ -497,7 +498,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 										//MmsValue * analog_data = createAnalogValue(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6]);
 
-										handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
+										handle_analog_report(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
 
 										octet_offset = octet_offset + RULE2_ANALOG_REPORT_SIZE;
 									} else {
@@ -574,31 +575,37 @@ static int read_configuration() {
 				}
 			}
 	
-			//Command
-			if(type == 'D' && origin ==7){
+			//Command Digital
+			if(type == 'D' && origin ==7 ){
 				//add $C to the end of command
 				if (id_ponto[21] == 'K') {
 					id_ponto[22] = '$';
 					id_ponto[23] = 'C';
 				}
 				printf("command type for %s discarded\n", id_ponto);
-			} //Events
+			}//Command Analog
+			else if(type == 'A' && origin ==7 ){
+				//add $C to the end of command
+				if (id_ponto[21] == 'K') {
+					id_ponto[22] = '$';
+					id_ponto[23] = 'C';
+				}
+				printf("command type for %s discarded\n", id_ponto);
+			}
+		   	//Events
 			else if(type == 'D' && event == 3){
 				memcpy(events[num_of_event_ids].id,id_ponto,25);
 				events[num_of_event_ids].nponto = nponto;
-				printf("event %s \n", events[num_of_event_ids].id);
 				num_of_event_ids++;
 			} //Digital
 			else if(type == 'D'){
 				memcpy(digital[num_of_digital_ids].id,id_ponto,25);
 				digital[num_of_digital_ids].nponto = nponto;
-				printf("digital %s \n", digital[num_of_digital_ids].id);
 				num_of_digital_ids++;
 			} //Analog
 			else if(type == 'A'){
 				memcpy(analog[num_of_analog_ids].id,id_ponto,25);
 				analog[num_of_analog_ids].nponto = nponto;
-				printf("analog %s \n", analog[num_of_analog_ids].id);
 				num_of_analog_ids++;
 			} //Unknown 
 			else {
@@ -694,11 +701,13 @@ int main (int argc, char ** argv){
 		printf("Connection OK!!!\n");
 
 		// DELETE DATASETS WHICH WILL BE USED
+		printf("deleting dada sets\n");
 		for (i=0; i < num_of_datasets; i++) {
 			MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
 		}
 
 		// CREATE TRASNFERSETS ON REMOTE SERVER	
+		printf("creating transfer sets\n");
 		for (i=0; i < num_of_datasets; i++){
 			MmsValue *transfer_set_dig  = get_next_transfer_set(con, error_file);
 			if( transfer_set_dig == NULL) {	
@@ -706,16 +715,19 @@ int main (int argc, char ** argv){
 				return -1;
 			} else {
 				strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
-				printf("New transfer set %s\n",dataset_conf[i].ts);
+				//printf("New transfer set %s\n",dataset_conf[i].ts);
 				MmsValue_delete(transfer_set_dig);
 			}
 		}	
 		
 		// CREATE DATASETS WITH CUSTOM VARIABLES
+		printf("creating data sets\n");
 		for (i=0; i < num_of_datasets; i++){
 			create_data_set(con, dataset_conf[i].id,i);
 		}
+		
 		// WRITE DATASETS TO TRANSFERSET
+		printf("writing data sets\n");
 		for (i=0; i < num_of_datasets; i++){
 			if(dataset_conf[i].type == DATASET_ANALOG) 
 				write_data_set(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_ANALOG_BUFFER_INTERVAL, DATASET_ANALOG_INTEGRITY_TIME);
