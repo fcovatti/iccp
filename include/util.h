@@ -7,11 +7,13 @@
 #include "mms_value.h"
 #include "mms_client_connection.h"
 
-void write_data_set(MmsConnection con, char * ds_name, char * ts_name, int buffer_time, int integrity_time);
+void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported);
 
-MmsValue * get_next_transfer_set(MmsConnection con, FILE * error_file);
+MmsValue * get_next_transferset(MmsConnection con, FILE * error_file);
 
-int check_connection(MmsConnection * con, FILE *    error_file);
+int check_connection(MmsConnection con, FILE *    error_file);
+
+int connect_to_server(MmsConnection con, char * server);
 
 static inline void print_value (char state, bool ana, time_t time_stamp) {
 	struct tm * time_result;

@@ -39,7 +39,7 @@ typedef struct {
 	char type;
 	float f;
 	unsigned char state;
-	int time_stamp;
+	time_t time_stamp;
 } data_config;
 
 typedef enum{
@@ -56,6 +56,19 @@ typedef struct {
 	int size;
 	unsigned int offset;
 } dataset_config;
+
+typedef struct {
+	unsigned int nponto;
+	float f;
+	unsigned char state;
+	time_t time_stamp;
+} __attribute__((packed)) data_analog_out;
+
+typedef struct {
+	unsigned int nponto;
+	unsigned char state;
+	time_t time_stamp;
+} __attribute__((packed)) data_digital_out;
 
 typedef union {
 	float f;

@@ -25,10 +25,13 @@
 #define DATASET_EVENTS_MAX_NUMBER 150
 
 // Name of the VCC on the remote server
-#define IDICCP "COS"
+#define IDICCP "HIS"
 
 // Name or IP of the remote iccp server
-#define SERVER_NAME "lab-ems1"
+#define SERVER_NAME_1 "ems1"
+#define SERVER_NAME_2 "ems2"
+#define SERVER_NAME_3 "lab-ems1"
+#define SERVER_NAME_4 "lab-ems1"
 
 // Name of the configuration file
 #define CONFIG_FILE "sage_id_no_1.txt"
@@ -37,9 +40,12 @@
 #define CONFIG_LOG "iccp_config.log"
 
 // Name of the data received log file
-#define DATA_LOG "iccp_data.log"
+#define DATA_ANALOG_LOG "iccp_data_analog.bin"
+#define DATA_DIGITAL_LOG "iccp_data_digital.bin"
+#define DATA_EVENTS_LOG "iccp_data_events.bin"
 
-// Name of the error log file
+
+// Name of the error log filea
 #define ERROR_LOG "iccp_error.log"
 
 #endif

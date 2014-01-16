@@ -11,7 +11,9 @@
 #include "util.h"
 #include "config.h"
 
-#define CLIENT_DEBUG 1
+//#define CLIENT_DEBUG 1
+#define DATA_LOG 1
+
 
 static int running = 1;
 
@@ -31,9 +33,13 @@ static data_config * events = NULL;
 
 static dataset_config * dataset_conf = NULL;
 
-static FILE * data_file = NULL;
-static FILE * error_file = NULL;
+#ifdef DATA_LOG
+static FILE * data_file_analog = NULL;
+static FILE * data_file_digital = NULL;
+static FILE * data_file_events = NULL;
+#endif
 
+static FILE * error_file = NULL;
 
 static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp);
 static int handle_digital_state(unsigned char state, int index, time_t time_stamp);
@@ -65,9 +71,18 @@ static int handle_event_integrity(unsigned char state, int index,time_t time_sta
 static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp){
 
 	if (analog != NULL && index < num_of_analog_ids) {
+
+#ifdef DATA_LOG
 		if(	(analog[index].f != value) || (analog[index].state != state)){
-			fprintf(data_file, "%08d %02X %u %.2f\n", analog[index].nponto, state, (int)time_stamp, value);
+			//fprintf(data_file_analog, "%08d %02X %u %.2f\n", analog[index].nponto, state, (int)time_stamp, value);
+			data_analog_out data;
+			data.nponto = analog[index].nponto;
+			data.state = state;
+			data.time_stamp = time_stamp;
+			data.f = value;
+			fwrite(&data,1,sizeof(data_analog_out),data_file_analog);
 		}
+#endif
 		analog[index].f = value;
 		analog[index].state = state;
 		analog[index].time_stamp = time_stamp;
@@ -82,9 +97,17 @@ static int handle_analog_state(float value, unsigned char state, int index,time_
 static int handle_digital_state(unsigned char state, int index, time_t time_stamp){
 
 	if (digital != NULL && index < num_of_digital_ids) {
+
+#ifdef DATA_LOG
 		if((digital[index].state != state)){
-			fprintf(data_file, "%08d %02X %u\n", digital[index].nponto, state, (int)time_stamp);
+			//fprintf(data_file_digital, "%08d %02X %u\n", digital[index].nponto, state, (int)time_stamp);
+			data_digital_out data;
+			data.nponto = digital[index].nponto;
+			data.state = state;
+			data.time_stamp = time_stamp;
+			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
+#endif
 		digital[index].state = state;
 		digital[index].time_stamp = time_stamp;
 #ifdef CLIENT_DEBUG	
@@ -98,9 +121,17 @@ static int handle_digital_state(unsigned char state, int index, time_t time_stam
 static int handle_event_state(unsigned char state, int index, time_t time_stamp){
 
 	if (events != NULL && index < num_of_event_ids) {
+
+#ifdef DATA_LOG
 		if((events[index].state != state)){
-			fprintf(data_file, "%08d %02X %u\n", events[index].nponto, state, (int)time_stamp);
+			//fprintf(data_file_events, "%08d %02X %u\n", events[index].nponto, state, (int)time_stamp);
+			data_digital_out data;
+			data.nponto = events[index].nponto;
+			data.state = state;
+			data.time_stamp = time_stamp;
+			fwrite(&data,1,sizeof(data_digital_out),data_file_events);
 		}
+#endif
 		events[index].state = state;
 		events[index].time_stamp = time_stamp;
 #ifdef CLIENT_DEBUG	
@@ -111,9 +142,9 @@ static int handle_event_state(unsigned char state, int index, time_t time_stamp)
 	return 0;
 }
 
-static int read_data_set(MmsConnection con, char * ds_name, int offset){
+static int read_dataset(MmsConnection con, char * ds_name, int offset){
 	MmsValue* dataSet;
-	MmsClientError mmsError;
+	MmsError mmsError;
 	int i, idx;
 
 	MmsValue* dataSetValue;
@@ -135,7 +166,8 @@ static int read_data_set(MmsConnection con, char * ds_name, int offset){
 			dataSetValue = MmsValue_getElement(dataSet, INDEX_OFFSET+i);
 			if(dataSetValue == NULL) {
 				fprintf(error_file, "ERROR - could not get DATASET values offset %d element %d %d \n",offset, idx, number_of_variables);
-				return -1;
+				//TODO return -1;
+				continue;
 			}
 
 			if(dataset_conf[offset].type == DATASET_ANALOG){
@@ -233,27 +265,42 @@ static int read_data_set(MmsConnection con, char * ds_name, int offset){
 				fprintf(error_file, "ERROR - unknown configuration type for dataset %d offset %d\n", offset, idx);
 				return -1;
 			}
-			MmsValue_delete(dataSetValue); 
+			//MmsValue_delete(dataSetValue); 
 
 		}
 	}
-	//MmsValue_delete(dataSet); 
+	//after reading dataset flush files
+#if DATA_LOG
+	switch(dataset_conf[offset].type) {
+		case DATASET_ANALOG:
+			fflush(data_file_analog);	
+			break;
+		case DATASET_DIGITAL:
+			fflush(data_file_digital);
+			break;
+		case DATASET_EVENTS:
+			fflush(data_file_events);
+			break;
+	}
+#endif
+
+	MmsValue_delete(dataSet); 
 	return 0;
 }
 
-static void create_data_set(MmsConnection con, char * ds_name, int offset)
+static void create_dataset(MmsConnection con, char * ds_name, int offset)
 {
-	MmsClientError mmsError;
+	MmsError mmsError;
 	int i=0;
 	int first = 0;
 	int last = 0;
 	LinkedList variables = LinkedList_create();
 
 	//printf("create_data_Set %d\n", offset);
-	MmsVariableSpecification * var; 
-	MmsVariableSpecification * name = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Name");
-	MmsVariableSpecification * ts   = MmsVariableSpecification_create (IDICCP, "Transfer_Set_Time_Stamp");
-	MmsVariableSpecification * ds   = MmsVariableSpecification_create (IDICCP, "DSConditions_Detected");
+	MmsVariableAccessSpecification * var; 
+	MmsVariableAccessSpecification * name = MmsVariableAccessSpecification_create (IDICCP, "Transfer_Set_Name");
+	MmsVariableAccessSpecification * ts   = MmsVariableAccessSpecification_create (IDICCP, "Transfer_Set_Time_Stamp");
+	MmsVariableAccessSpecification * ds   = MmsVariableAccessSpecification_create (IDICCP, "DSConditions_Detected");
 	LinkedList_add(variables, name );
 	LinkedList_add(variables, ts);
 	LinkedList_add(variables, ds);
@@ -264,7 +311,7 @@ static void create_data_set(MmsConnection con, char * ds_name, int offset)
 		first = DATASET_MAX_SIZE*offset;
 		last = DATASET_MAX_SIZE*(offset+1);
 		for (i = first; (i<last) &&( i < num_of_analog_ids);i++){
-			var = MmsVariableSpecification_create (IDICCP, analog[i].id);
+			var = MmsVariableAccessSpecification_create (IDICCP, analog[i].id);
 			var->arrayIndex = 0;	
 			LinkedList_add(variables, var);
 		}
@@ -277,7 +324,7 @@ static void create_data_set(MmsConnection con, char * ds_name, int offset)
 		first = DATASET_MAX_SIZE*(offset-num_of_analog_datasets);
 		last = DATASET_MAX_SIZE*(offset-num_of_analog_datasets +1);
 		for (i = first; (i<last) &&( i < num_of_digital_ids);i++){
-			var = MmsVariableSpecification_create (IDICCP, digital[i].id);
+			var = MmsVariableAccessSpecification_create (IDICCP, digital[i].id);
 			var->arrayIndex = 0;	
 			LinkedList_add(variables, var);
 		}
@@ -290,7 +337,7 @@ static void create_data_set(MmsConnection con, char * ds_name, int offset)
 		first = DATASET_MAX_SIZE*(offset-num_of_analog_datasets-num_of_digital_datasets);
 		last = DATASET_MAX_SIZE*(offset-num_of_analog_datasets-num_of_digital_datasets +1);
 		for (i = first; (i<last) &&( i < num_of_event_ids);i++){
-			var = MmsVariableSpecification_create (IDICCP, events[i].id);
+			var = MmsVariableAccessSpecification_create (IDICCP, events[i].id);
 			var->arrayIndex = 0;	
 			LinkedList_add(variables, var);
 		}
@@ -316,7 +363,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	time_t time_stamp;
 	char * domain_id = NULL;
 	char * transfer_set = NULL;
-	MmsClientError mmsError;
+	MmsError mmsError;
 	int octet_offset = 0;
 	time(&time_stamp);
 	printf("*************Information Report Received %d********************\n", attributesCount);
@@ -515,6 +562,20 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							} else {
 								fprintf(error_file,"ERROR - invalid RULE\n");
 							}
+							//after handling report flush files
+#if DATA_LOG
+							switch(dataset_conf[offset].type) {
+								case DATASET_ANALOG:
+								   fflush(data_file_analog);	
+								   break;
+								case DATASET_DIGITAL:
+								   fflush(data_file_digital);
+								   break;
+								case DATASET_EVENTS:
+								   fflush(data_file_events);
+								   break;
+							}
+#endif
 						} else {
 							fprintf(error_file,"ERROR - empty bitstring\n");
 						}
@@ -543,7 +604,7 @@ static int read_configuration() {
 	int origin = 0;
 	int event = 0;
 	unsigned int nponto = 0;
-	char id_ponto[25];
+	char id_ponto[25] = "";
 	char type = 0;
 	int i;
 
@@ -570,7 +631,7 @@ static int read_configuration() {
 
 			//change - for $
 			for ( i=0; i <22; i++) {
-				if (id_ponto[i] == '-'){
+				if (id_ponto[i] == '-' || id_ponto[i] == '+'){
 					id_ponto[i] = '$';
 				}
 			}
@@ -667,9 +728,27 @@ static void sigint_handler(int signalId)
 }
 
 
+static void cleanup_variables(MmsConnection con)
+{
+	printf("cleanning up variables\n");
+
+#ifdef DATA_LOG
+	fclose(data_file_analog);
+	fclose(data_file_digital);
+	fclose(data_file_events);
+#endif
+	fclose(error_file);
+	free(dataset_conf);
+	free(analog);
+	free(digital);
+	free(events);
+	MmsConnection_destroy(con);
+
+}
+
 int main (int argc, char ** argv){
 	int i = 0;
-	MmsClientError mmsError;
+	MmsError mmsError;
 	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
 		
@@ -680,14 +759,30 @@ int main (int argc, char ** argv){
 	} else {
 		printf("Start configuration with %d analog, %d digital, %d events and %d datasets\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_datasets);
 	}
-	
-	data_file = fopen(DATA_LOG, "w");
-	if(data_file==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_LOG);
-		fclose(data_file);
+
+	// OPEN DATA LOG	
+#ifdef DATA_LOG
+	data_file_analog = fopen(DATA_ANALOG_LOG, "w");
+	if(data_file_analog==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_ANALOG_LOG);
+		cleanup_variables(con);
 		return -1;
 	}
+	data_file_digital = fopen(DATA_DIGITAL_LOG, "w");
+	if(data_file_digital==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_DIGITAL_LOG);
+		cleanup_variables(con);
+		return -1;
+	}
+	data_file_events = fopen(DATA_EVENTS_LOG, "w");
+	if(data_file_events==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_EVENTS_LOG);
+		cleanup_variables(con);
+		return -1;
+	}
+#endif
 
+	// OPEN ERROR LOG
 	error_file = fopen(ERROR_LOG, "w");
 	if(error_file==NULL){
 		printf("Error, cannot open error log file %s\n", ERROR_LOG);
@@ -695,78 +790,73 @@ int main (int argc, char ** argv){
 		return -1;
 	}
 
-	//INITIALIZE CONNECTION
-	MmsIndication indication = MmsConnection_connect(con, &mmsError, SERVER_NAME, 102);
-	if (indication == MMS_OK){
-		printf("Connection OK!!!\n");
-
-		// DELETE DATASETS WHICH WILL BE USED
-		printf("deleting dada sets\n");
-		for (i=0; i < num_of_datasets; i++) {
-			MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
-		}
-
-		// CREATE TRASNFERSETS ON REMOTE SERVER	
-		printf("creating transfer sets\n");
-		for (i=0; i < num_of_datasets; i++){
-			MmsValue *transfer_set_dig  = get_next_transfer_set(con, error_file);
-			if( transfer_set_dig == NULL) {	
-				printf("Could not create transfer set for digital data\n");
-				return -1;
-			} else {
-				strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
-				//printf("New transfer set %s\n",dataset_conf[i].ts);
-				MmsValue_delete(transfer_set_dig);
-			}
-		}	
-		
-		// CREATE DATASETS WITH CUSTOM VARIABLES
-		printf("creating data sets\n");
-		for (i=0; i < num_of_datasets; i++){
-			create_data_set(con, dataset_conf[i].id,i);
-		}
-		
-		// WRITE DATASETS TO TRANSFERSET
-		printf("writing data sets\n");
-		for (i=0; i < num_of_datasets; i++){
-			if(dataset_conf[i].type == DATASET_ANALOG) 
-				write_data_set(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_ANALOG_BUFFER_INTERVAL, DATASET_ANALOG_INTEGRITY_TIME);
-			else if(dataset_conf[i].type == DATASET_DIGITAL)
-				write_data_set(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_DIGITAL_BUFFER_INTERVAL, DATASET_DIGITAL_INTEGRITY_TIME);
-			else if(dataset_conf[i].type == DATASET_EVENTS)
-				write_data_set(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_EVENTS_BUFFER_INTERVAL, DATASET_EVENTS_INTEGRITY_TIME);
-			else{
-				printf("unknown write dataset type\n");
-				return -1;
-			}
-
-		}
-		// READ VARIABLES
-		printf("*************Reading DS Values********************\n");
-		for (i=0; i < num_of_datasets; i++){
-			read_data_set(con, dataset_conf[i].id, i);
-		}
-	
-		// HANDLE REPORTS
-		MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
-		
-		// LOOP TO MANTAIN CONNECTION ACTIVE	
-		while(running) {
-			if (check_connection(&con, error_file) < 0)
-					break;
-			sleep(100000);//sleep 100ms
-		}
-
-	}else {
-		printf("Connection Error %d %d", indication, mmsError);
+	//INITIALIZE CONNECTION (TODO: resolve memory leak and add connection handler)
+	if ((connect_to_server(con, SERVER_NAME_1) < 0) && (connect_to_server(con, SERVER_NAME_2) < 0) &&
+	   	(connect_to_server(con, SERVER_NAME_3) < 0) && (connect_to_server(con, SERVER_NAME_4) < 0)) {
+		cleanup_variables(con);
+		return -1;
 	}
 
-	fclose(data_file);
-	fclose(error_file);
-	free(dataset_conf);
-	free(analog);
-	free(digital);
-	free(events);
-	MmsConnection_destroy(con);
+	// DELETE DATASETS WHICH WILL BE USED
+	printf("deleting dada sets\n");
+	for (i=0; i < num_of_datasets; i++) {
+		MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
+	}
+
+	// CREATE TRASNFERSETS ON REMOTE SERVER	
+	printf("creating transfer sets\n");
+	for (i=0; i < num_of_datasets; i++){
+		MmsValue *transfer_set_dig  = get_next_transferset(con, error_file);
+		if( transfer_set_dig == NULL) {	
+			printf("Could not create transfer set for digital data\n");
+			cleanup_variables(con);
+			return -1;
+		} else {
+			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
+			//printf("New transfer set %s\n",dataset_conf[i].ts);
+			MmsValue_delete(transfer_set_dig);
+		}
+	}	
+
+	// CREATE DATASETS WITH CUSTOM VARIABLES
+	printf("creating data sets\n");
+	for (i=0; i < num_of_datasets; i++){
+		create_dataset(con, dataset_conf[i].id,i);
+	}
+
+	// WRITE DATASETS TO TRANSFERSET
+	printf("writing data sets\n");
+	for (i=0; i < num_of_datasets; i++){
+		if(dataset_conf[i].type == DATASET_ANALOG) 
+			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_ANALOG_BUFFER_INTERVAL, DATASET_ANALOG_INTEGRITY_TIME, 0);
+		else if(dataset_conf[i].type == DATASET_DIGITAL)
+			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_DIGITAL_BUFFER_INTERVAL, DATASET_DIGITAL_INTEGRITY_TIME, 1);
+		else if(dataset_conf[i].type == DATASET_EVENTS)
+			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_EVENTS_BUFFER_INTERVAL, DATASET_EVENTS_INTEGRITY_TIME, 1);
+		else{
+			printf("unknown write dataset type\n");
+			cleanup_variables(con);
+			return -1;
+		}
+
+	}
+	// READ VARIABLES
+	printf("*************Reading DS Values********************\n");
+	for (i=0; i < num_of_datasets; i++){
+		read_dataset(con, dataset_conf[i].id, i);
+	}
+
+	// HANDLE REPORTS
+	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
+
+	// LOOP TO MANTAIN CONNECTION ACTIVE	
+	while(running) {
+		if (check_connection(con, error_file) < 0)
+			break;
+		sleep(2);//sleep 2s
+	}
+
+	cleanup_variables(con);
+
 	return 0;
 }
