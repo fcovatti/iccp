@@ -73,7 +73,7 @@ typedef struct {
 typedef union {
 	float f;
 	char  s[4];
-} float_data;
+}float_data ;
 
 typedef union {
 	unsigned int t;

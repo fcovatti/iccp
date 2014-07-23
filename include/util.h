@@ -4,7 +4,7 @@
 
 #include <time.h>
 #include "mms_types.h"
-#include "mms_value.h"
+#include "mms_value_internal.h"
 #include "mms_client_connection.h"
 
 void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported);

@@ -7,6 +7,7 @@
 #include <malloc.h>
 #include <signal.h>
 #include "mms_client_connection.h"
+#include "mms_value_internal.h"
 #include "client.h"
 #include "util.h"
 #include "config.h"
@@ -173,7 +174,7 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 			if(dataset_conf[offset].type == DATASET_ANALOG){
 				MmsValue* analog_value;
 				float analog_data;
-				char analog_state;
+				char analog_state = 0;
 
 				//First element Floating Point Value
 				analog_value = MmsValue_getElement(dataSetValue, 0);

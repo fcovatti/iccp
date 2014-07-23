@@ -1,4 +1,4 @@
-LIBIEC_HOME=../../libiec61850-iccp-0.6
+LIBIEC_HOME=../../libiec61850-iccp-0.7.7
 
 PROJECT_BINARY_NAME = iccp_client
 PROJECT_SOURCES = client.c

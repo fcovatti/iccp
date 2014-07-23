@@ -28,8 +28,8 @@
 #define IDICCP "HIS"
 
 // Name or IP of the remote iccp server
-#define SERVER_NAME_1 "ems1"
-#define SERVER_NAME_2 "ems2"
+#define SERVER_NAME_1 "ems2"
+#define SERVER_NAME_2 "ems3"
 #define SERVER_NAME_3 "lab-ems1"
 #define SERVER_NAME_4 "lab-ems1"
 
