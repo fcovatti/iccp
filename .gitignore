@@ -1,11 +1,15 @@
 *.TXT
+*.txt
 *.CFG
 *.LOG
 *.BIN
+*.bin
 *.SOE
+*.log
 *.o
 *.d
 *.h.gch
+build/*
 bin/*
 .cproject
 .project

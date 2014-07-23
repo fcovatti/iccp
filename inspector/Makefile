@@ -1,4 +1,4 @@
-LIBIEC_HOME=../../libiec61850-iccp3
+LIBIEC_HOME=../../libiec61850-iccp-0.6
 
 PROJECT_BINARY_NAME = inspector
 PROJECT_SOURCES = inspector.c
