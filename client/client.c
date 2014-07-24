@@ -12,7 +12,10 @@
 #include "util.h"
 #include "config.h"
 
-//#define CLIENT_DEBUG 1
+/* Defines for code debugging*/
+#define HANDLE_DIGITAL_DATA_DEBUG 1
+#define HANDLE_ANALOG_DATA_DEBUG 1
+#define HANDLE_EVENTS_DATA_DEBUG 1
 #define DATA_LOG 1
 
 
@@ -87,9 +90,9 @@ static int handle_analog_state(float value, unsigned char state, int index,time_
 		analog[index].f = value;
 		analog[index].state = state;
 		analog[index].time_stamp = time_stamp;
-#ifdef CLIENT_DEBUG	
-		printf("%25s: %06.07f |", analog[index].id, value);
-		print_value(state,1, time_stamp);
+#ifdef HANDLE_ANALOG_DATA_DEBUG	
+		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_off);
+		print_value(state,1, time_stamp, "", "");
 #endif
 	}
 	return 0;
@@ -111,9 +114,9 @@ static int handle_digital_state(unsigned char state, int index, time_t time_stam
 #endif
 		digital[index].state = state;
 		digital[index].time_stamp = time_stamp;
-#ifdef CLIENT_DEBUG	
+#ifdef HANDLE_DIGITAL_DATA_DEBUG	
 		printf("%25s: ", digital[index].id);
-		print_value(state,0, time_stamp);
+		print_value(state,0, time_stamp,digital[index].state_off, digital[index].state_on);
 #endif
 	}
 	return 0;
@@ -135,9 +138,9 @@ static int handle_event_state(unsigned char state, int index, time_t time_stamp)
 #endif
 		events[index].state = state;
 		events[index].time_stamp = time_stamp;
-#ifdef CLIENT_DEBUG	
+#ifdef HANDLE_EVENTS_DATA_DEBUG	
 		printf("%25s: ", events[index].id);
-		print_value(state,0, time_stamp);
+		print_value(state,0, time_stamp,events[index].state_off, events[index].state_on);
 #endif
 	}
 	return 0;
@@ -158,6 +161,7 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 	dataSet = MmsConnection_readNamedVariableListValues(con, &mmsError, IDICCP, ds_name, 0);
 	if (dataSet == NULL){
 		fprintf(error_file,"ERROR - reading dataset failed! %d\n", mmsError);                                                                                                   
+		fflush(error_file);
 		return -1;
 	}else{
 		for (i=0; i < number_of_variables; i ++) {
@@ -167,6 +171,7 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 			dataSetValue = MmsValue_getElement(dataSet, INDEX_OFFSET+i);
 			if(dataSetValue == NULL) {
 				fprintf(error_file, "ERROR - could not get DATASET values offset %d element %d %d \n",offset, idx, number_of_variables);
+				fflush(error_file);
 				//TODO return -1;
 				continue;
 			}
@@ -179,7 +184,8 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//First element Floating Point Value
 				analog_value = MmsValue_getElement(dataSetValue, 0);
 				if(analog_value == NULL) {
-					fprintf(error_file, "ERROR - could not get floating point value %s\n", analog[idx].id);
+					fprintf(error_file, "ERROR - could not get floating point value %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
+					fflush(error_file);
 					return -1;
 				} 
 
@@ -188,7 +194,8 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//Second Element BitString data state
 				analog_value = MmsValue_getElement(dataSetValue, 1);
 				if(analog_value == NULL) {
-					fprintf(error_file, "ERROR - could not get analog state %s\n", analog[idx].id);
+					fprintf(error_file, "ERROR - could not get analog state %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
+					fflush(error_file);
 					return -1;
 				} 
 				
@@ -200,13 +207,15 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
 				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get digital Data_TimeStampExtended %s\n", digital[idx].id);
+					fprintf(error_file, "ERROR - could not get digital Data_TimeStampExtended %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				timeStamp = MmsValue_getElement(dataSetElem, 0);
 
 				if(timeStamp == NULL) {
-					fprintf(error_file, "ERROR - could not get digital timestamp value %s\n", digital[idx].id);
+					fprintf(error_file, "ERROR - could not get digital timestamp value %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				time_stamp = MmsValue_toUint32(timeStamp);
@@ -214,7 +223,8 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//Second Element DataState
 				dataSetElem = MmsValue_getElement(dataSetValue, 1);
 				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get digital DataState %s\n", digital[idx].id);
+					fprintf(error_file, "ERROR - could not get digital DataState %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				handle_digital_integrity(dataSetElem->value.bitString.buf[0], idx, time_stamp);
@@ -224,13 +234,15 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
 				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get event Data_TimeStampExtended %s\n", events[idx].id);
+					fprintf(error_file, "ERROR - could not get event Data_TimeStampExtended %s - nponto %d\n", events[idx].id, events[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				timeStamp = MmsValue_getElement(dataSetElem, 0);
 
 				if(timeStamp == NULL) {
-					fprintf(error_file, "ERROR - could not get event timestamp value %s\n", events[idx].id);
+					fprintf(error_file, "ERROR - could not get event timestamp value %s - nponto %d\n", events[idx].id, events[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				time_stamp = MmsValue_toUint32(timeStamp);
@@ -238,7 +250,8 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				//Second Element DataState
 				dataSetElem = MmsValue_getElement(dataSetValue, 1);
 				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get event DataState %s\n", events[idx].id);
+					fprintf(error_file, "ERROR - could not get event DataState %s - nponto %d\n", events[idx].id, events[idx].nponto);
+					fflush(error_file);
 					return -1;
 				}
 				handle_event_integrity(dataSetElem->value.bitString.buf[0], idx, time_stamp);
@@ -264,6 +277,7 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				printf("command dataset\n");
 			} else{
 				fprintf(error_file, "ERROR - unknown configuration type for dataset %d offset %d\n", offset, idx);
+				fflush(error_file);
 				return -1;
 			}
 			//MmsValue_delete(dataSetValue); 
@@ -367,7 +381,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	MmsError mmsError;
 	int octet_offset = 0;
 	time(&time_stamp);
-	printf("*************Information Report Received %d********************\n", attributesCount);
+	//printf("*************Information Report Received %d********************\n", attributesCount);
 	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
 		LinkedList list_names	 = LinkedList_getNext(attributes);
 		while (list_names != NULL) {
@@ -375,6 +389,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 			if(attribute_name == NULL){
 				i++;
 				fprintf (error_file, "ERROR - received report with null atribute name\n");
+				fflush(error_file);
 				continue;
 			}
 			list_names = LinkedList_getNext(list_names);
@@ -382,6 +397,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 			if(dataSetValue == NULL){
 				i++;
 				fprintf (error_file, "ERROR - received report with null dataset\n");
+				fflush(error_file);
 				continue;
 			}
 
@@ -394,15 +410,18 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 						domain_id = MmsValue_toString(d_id);
 					} else {
 						fprintf(error_file, "ERROR - Empty domain id on report\n");
+						fflush(error_file);
 					}
 					ts_name = MmsValue_getElement(dataSetValue, 2);
 					if(ts_name !=NULL) {
 						transfer_set = MmsValue_toString(ts_name);
 					} else {
 						fprintf(error_file, "ERROR - Empty transfer set name on report\n");
+						fflush(error_file);
 					}
 				} else {
 					fprintf(error_file,"ERROR - Empty data for transfer set report\n");
+					fflush(error_file);
 				}					
 				i++;
 				continue;
@@ -437,6 +456,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 								if(dataSetValue->value.octetString.size == 0) {
 									fprintf(error_file, "ERROR - empty octetString\n");
+									fflush(error_file);
 									return;
 								}
 
@@ -473,6 +493,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										printf("command no report\n");
 									} else {
 										fprintf(error_file, "ERROR - wrong index %d\n", offset);
+										fflush(error_file);
 										return;
 									}
 									index++;
@@ -490,6 +511,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								//RULE 2
 								if(dataSetValue->value.octetString.size == 0) {
 									fprintf(error_file,"ERROR - empty octetString\n");
+									fflush(error_file);
 									return;
 								}
 
@@ -504,6 +526,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
 										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
 											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											fflush(error_file);
 											MmsValue_delete(value);
 											//LinkedList_destroy(attributes);
 											return;
@@ -519,6 +542,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
 										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
 											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											fflush(error_file);
 											MmsValue_delete(value);
 											//LinkedList_destroy(attributes);
 											return;
@@ -534,6 +558,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										float_data data_value;
 										if(dataSetValue->value.octetString.size < (RULE2_ANALOG_REPORT_SIZE + octet_offset)) {
 											fprintf(error_file,"ERROR - Wrong size of analog report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+											fflush(error_file);
 											MmsValue_delete(value);
 											//LinkedList_destroy(attributes);
 											return;
@@ -551,6 +576,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										octet_offset = octet_offset + RULE2_ANALOG_REPORT_SIZE;
 									} else {
 										fprintf(error_file,"ERROR - unkonwn information report index %d\n", index);
+										fflush(error_file);
 										int j;
 										for (j=0; j < dataSetValue->value.octetString.size; j ++){
 											printf(" %x", dataSetValue->value.octetString.buf[j]);
@@ -562,6 +588,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								}
 							} else {
 								fprintf(error_file,"ERROR - invalid RULE\n");
+								fflush(error_file);
 							}
 							//after handling report flush files
 #if DATA_LOG
@@ -579,9 +606,11 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 #endif
 						} else {
 							fprintf(error_file,"ERROR - empty bitstring\n");
+							fflush(error_file);
 						}
 					} else {
 						fprintf(error_file,"ERROR - NULL Element\n");
+						fflush(error_file);
 					}
 				}
 				}
@@ -594,6 +623,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 		//LinkedList_destroy(attributes);
 	} else{
 		fprintf(error_file, "ERROR - wrong report %d %d %d %d\n",value != NULL, attributes != NULL , attributesCount , parameter != NULL);
+		fflush(error_file);
 	}
 	//TODO: free values
 }
@@ -606,6 +636,9 @@ static int read_configuration() {
 	int event = 0;
 	unsigned int nponto = 0;
 	char id_ponto[25] = "";
+	char state_name[35] = "";
+	int state_split = 0;
+	int state_data=0;
 	char type = 0;
 	int i;
 
@@ -627,7 +660,7 @@ static int read_configuration() {
 
 		while ( fgets(line, 300, file)){
 			//if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
-			if(sscanf(line, "%d %*d %22s %c %*31s %*d %*d %*d %d %*c %*d %*d %*f %*f %*d %d", &nponto,  id_ponto, &type, &origin, &event ) <1)
+			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %*d %*d %*f %*f %*d %d", &nponto,  id_ponto, &type, state_name, &origin, &event ) <1)
 				break;
 
 			//change - for $
@@ -658,21 +691,61 @@ static int read_configuration() {
 			else if(type == 'D' && event == 3){
 				memcpy(events[num_of_event_ids].id,id_ponto,25);
 				events[num_of_event_ids].nponto = nponto;
+				
+				state_split=0;
+				for ( i=0; i <35; i++) {
+					if (state_name[i] == '/' ){
+						state_split=i;
+						events[num_of_event_ids].state_off[i]=0;
+						continue;
+					}
+					if(state_split){
+						if (state_name[i] == 0 ) {
+							events[num_of_event_ids].state_on[i-state_split-1]=0;
+							break;
+						}else
+							events[num_of_event_ids].state_on[i-state_split-1] = state_name[i];
+
+					}else
+						events[num_of_event_ids].state_off[i]=state_name[i];
+				}
+
 				num_of_event_ids++;
 			} //Digital
 			else if(type == 'D'){
 				memcpy(digital[num_of_digital_ids].id,id_ponto,25);
 				digital[num_of_digital_ids].nponto = nponto;
+				
+				state_split=0;
+				for ( i=0; i <35; i++) {
+					if (state_name[i] == '/' ){
+						state_split=i;
+						digital[num_of_digital_ids].state_off[i]=0;
+						continue;
+					}
+					if(state_split){
+						if (state_name[i] == 0 ) {
+							digital[num_of_digital_ids].state_on[i-state_split-1] =0;
+							break;
+						}else
+							digital[num_of_digital_ids].state_on[i-state_split-1] = state_name[i];
+					}else
+						digital[num_of_digital_ids].state_off[i]=state_name[i];
+				}
+
+
 				num_of_digital_ids++;
 			} //Analog
 			else if(type == 'A'){
 				memcpy(analog[num_of_analog_ids].id,id_ponto,25);
 				analog[num_of_analog_ids].nponto = nponto;
+				memcpy(analog[num_of_analog_ids].state_off,state_name,  16);
 				num_of_analog_ids++;
 			} //Unknown 
 			else {
 				printf("ERROR reading configuration file! Unknown type");
 			}
+
 		}
 	}
 

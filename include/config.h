@@ -1,7 +1,6 @@
 #ifndef CONFIG_H_INCLUDED
 #define CONFIG_H_INCLUDED
 
-
 // Time in seconds for buffering an event on a dataset before reporting to the client
 #define DATASET_ANALOG_BUFFER_INTERVAL 10
 #define DATASET_DIGITAL_BUFFER_INTERVAL 1
@@ -28,13 +27,13 @@
 #define IDICCP "HIS"
 
 // Name or IP of the remote iccp server
-#define SERVER_NAME_1 "ems2"
+#define SERVER_NAME_1 "ems3"
 #define SERVER_NAME_2 "ems3"
 #define SERVER_NAME_3 "lab-ems1"
 #define SERVER_NAME_4 "lab-ems1"
 
 // Name of the configuration file
-#define CONFIG_FILE "sage_id_no_1.txt"
+#define CONFIG_FILE "sage_id_no_155.txt"
 
 // Name of the configuration log file
 #define CONFIG_LOG "iccp_config.log"
@@ -44,8 +43,7 @@
 #define DATA_DIGITAL_LOG "iccp_data_digital.bin"
 #define DATA_EVENTS_LOG "iccp_data_events.bin"
 
-
-// Name of the error log filea
+// Name of the error log file
 #define ERROR_LOG "iccp_error.log"
 
 #endif

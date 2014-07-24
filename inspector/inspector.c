@@ -22,6 +22,7 @@ static int running = 1;
 static void sigint_handler(int signalID){
 	running = 0;
 }
+
 int main (int argc, char ** argv){
 	int socket_dumper;
 	unsigned int nponto;
@@ -36,6 +37,7 @@ int main (int argc, char ** argv){
 		return -1;
 	}
 
+	printf(" "); //just for adjusting padding of first printed value
 	if(strcmp(argv[1],"analog") == 0) {
 		file = fopen(DATA_ANALOG_LOG, "r");
 		if(file==NULL){
@@ -44,9 +46,9 @@ int main (int argc, char ** argv){
 		} 
 		while (!feof(file) && running) {
 			fread(&analog,1,sizeof(data_analog_out), file);
-			printf("%d |",analog.nponto);
-			printf("%f |",analog.f);
-			print_value(analog.state, 1 , analog.time_stamp);
+			printf("%7d |",analog.nponto);
+			printf("%10.2f |",analog.f);
+			print_value(analog.state, 1 , analog.time_stamp, "","");
 		}
 		fclose(file);
 	}
@@ -59,8 +61,8 @@ int main (int argc, char ** argv){
 		} 
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
-			printf("%d |",digital.nponto);
-			print_value(digital.state, 1 , digital.time_stamp);
+			printf("%7d |",digital.nponto);
+			print_value(digital.state, 0 , digital.time_stamp, "","");
 		}
 		fclose(file);
 	}
@@ -73,15 +75,64 @@ int main (int argc, char ** argv){
 		} 
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
-			printf("%d |",digital.nponto);
-			print_value(digital.state, 1 , digital.time_stamp);
+			printf("%7d |",digital.nponto);
+			print_value(digital.state, 0 , digital.time_stamp, "","");
 		}
 		fclose(file);
 	}
 
 	if(strcmp(argv[1],"nponto") == 0 && argc == 3) {
+		char valor_on[16] = "";
+		char valor_off[16] = "";
 		nponto = atoi(argv[2]);
-		printf("Searching changes in nponto %d\n", nponto);
+		printf("Searching changes in nponto %d\n\n", nponto);
+		
+		// print sage_id description
+		file = fopen(CONFIG_FILE, "r");
+		if(file==NULL){
+			printf("Error, cannot open configuration file %s\n", CONFIG_FILE);
+			return -1;
+		} else{
+			char line[300];
+			unsigned int nponto_file = 0;
+			char valores[35];
+			char descritivo[45];
+			//first two rows of CONFIG_FILE are the reader, discard them
+			if(!fgets(line, 300, file) || !fgets(line, 300, file)){
+				printf("Error reading %s file header\n", CONFIG_FILE);
+				return -1;
+			}
+			while ( fgets(line, 300, file)){
+				if(sscanf(line, "%d %*d %*22s %*c %31s %*d %*d %*d %*d %*c %*d %*d %*f %*f %*d %*d %*d %*f %44c", &nponto_file,  valores, descritivo ) <1)
+				//if(sscanf(line, "%d ", &nponto_file) <1)
+					break;
+				if (nponto == nponto_file){
+					//nponto found in sage_id
+					int i = 0;
+					int value_split = 0;
+					for ( i=0; i <35; i++) {
+						if (valores[i] == '/' ){
+							value_split=i;
+							valor_off[i]=0;
+							continue;
+						}
+						if(value_split){
+							if (valores[i] == 0 ) {
+								valor_on[i-value_split-1] =0;
+								break;
+							}else
+								valor_on[i-value_split-1] = valores[i];
+						}else
+							valor_off[i] = valores[i];
+
+					}
+					break;
+				}
+			}
+		}
+		fclose(file);
+
+		printf(" ");
 		file = fopen(DATA_ANALOG_LOG, "r");
 		if(file==NULL){
 			printf("Error, cannot open data file %s\n", DATA_ANALOG_LOG);
@@ -90,9 +141,9 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&analog,1,sizeof(data_analog_out), file);
 			if(nponto == analog.nponto) {
-				printf("%d |",analog.nponto);
-				printf("%f |",analog.f);
-				print_value(analog.state, 1 , analog.time_stamp);
+				printf("%7d |",analog.nponto);
+				printf("%11.2f %-6s |",analog.f, valor_off);
+				print_value(analog.state, 1 , analog.time_stamp, "","");
 			}
 		}
 		fclose(file);
@@ -104,8 +155,8 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
-				printf("%d |",digital.nponto);
-				print_value(digital.state, 1 , digital.time_stamp);
+				printf("%7d |",digital.nponto);
+				print_value(digital.state, 0 , digital.time_stamp, valor_off, valor_on);
 			}
 		}
 		fclose(file);
@@ -117,10 +168,12 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
-				printf("%d |",digital.nponto);
-				print_value(digital.state, 1 , digital.time_stamp);
-			}		}
+				printf("%7d |",digital.nponto);
+				print_value(digital.state, 0 , digital.time_stamp, valor_off, valor_on);
+			}
+		}
 		fclose(file);
+
 	}
 	return 0;
 }

@@ -36,6 +36,8 @@
 typedef struct {
 	unsigned int nponto;
 	char id[25];
+	char state_on[16];
+	char state_off[16];
 	char type;
 	float f;
 	unsigned char state;
