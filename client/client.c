@@ -13,10 +13,11 @@
 #include "config.h"
 
 /* Defines for code debugging*/
-#define HANDLE_DIGITAL_DATA_DEBUG 1
+//#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
-#define HANDLE_EVENTS_DATA_DEBUG 1
-#define REPORTS_ONLY_DATA_DEBUG 1
+//#define HANDLE_EVENTS_DATA_DEBUG 1
+//#define REPORTS_ONLY_DATA_DEBUG 1
+//#define DEBUG_READ_DATASET 1
 #define DATA_LOG 1
 
 
@@ -162,8 +163,12 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 	MmsValue* dataSetElem;
 	MmsValue* timeStamp;
 	time_t time_stamp;
-
+#ifdef DEBUG_READ_DATASET	
+	char debug_read[50];
+	int debug_i;
+#endif
 	int number_of_variables = dataset_conf[offset].size; 
+	unsigned char data_state =0;
 
 	dataSet = MmsConnection_readNamedVariableListValues(con, &mmsError, IDICCP, ds_name, 0);
 	if (dataSet == NULL){
@@ -176,6 +181,15 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 
 			//GET DATASET VALUES (FIRST 3 VALUES ARE ACCESS-DENIED)
 			dataSetValue = MmsValue_getElement(dataSet, INDEX_OFFSET+i);
+			
+#ifdef DEBUG_READ_DATASET	
+			memset(debug_read,0,50);
+			MmsValue_printToBuffer(dataSetValue, debug_read, 50);
+			for (debug_i=0;debug_i<50; debug_i++){
+				printf("%X", debug_read[debug_i]);
+			}
+			printf("\n");
+#endif			
 			if(dataSetValue == NULL) {
 				fprintf(error_file, "ERROR - could not get DATASET values offset %d element %d %d \n",offset, idx, number_of_variables);
 				fflush(error_file);
@@ -185,83 +199,93 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 
 			if(dataset_conf[offset].type == DATASET_ANALOG){
 				MmsValue* analog_value;
-				float analog_data;
-				char analog_state = 0;
+				float analog_data = 0.0;
+				data_state = 0;
 
 				//First element Floating Point Value
 				analog_value = MmsValue_getElement(dataSetValue, 0);
 				if(analog_value == NULL) {
 					fprintf(error_file, "ERROR - could not get floating point value %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
 					fflush(error_file);
-					return -1;
-				} 
-
-				analog_data = MmsValue_toFloat(analog_value);
-
-				//Second Element BitString data state
-				analog_value = MmsValue_getElement(dataSetValue, 1);
-				if(analog_value == NULL) {
-					fprintf(error_file, "ERROR - could not get analog state %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
-					fflush(error_file);
-					return -1;
-				} 
-				
-				analog_state = analog_value->value.bitString.buf[0];
+					//TODO if non existent object return -1;
+				}else { 
+					analog_data = MmsValue_toFloat(analog_value);
+					//Second Element BitString data state
+					analog_value = MmsValue_getElement(dataSetValue, 1);
+					if(analog_value == NULL) {
+						fprintf(error_file, "ERROR - could not get analog state %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
+						fflush(error_file);
+						//TODO if non existent object return -1;
+					} else {
+						data_state = analog_value->value.bitString.buf[0];
+					}
+				}
 				time( &time_stamp);
 
-				handle_analog_integrity(analog_data, analog_state,idx , time_stamp);
+				handle_analog_integrity(analog_data, data_state,idx , time_stamp);
 			} else if(dataset_conf[offset].type == DATASET_DIGITAL){
+				data_state = 0;
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
 				if(dataSetElem == NULL) {
 					fprintf(error_file, "ERROR - could not get digital Data_TimeStampExtended %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
 					fflush(error_file);
-					return -1;
-				}
-				timeStamp = MmsValue_getElement(dataSetElem, 0);
-
-				if(timeStamp == NULL) {
-					fprintf(error_file, "ERROR - could not get digital timestamp value %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
-					fflush(error_file);
-					return -1;
-				}
-				time_stamp = MmsValue_toUint32(timeStamp);
+					time(&time_stamp); //use system time stamp
+					//TODO if non existent object return -1;
+				}else{
+					timeStamp = MmsValue_getElement(dataSetElem, 0);
+					if(timeStamp == NULL) {
+						fprintf(error_file, "ERROR - could not get digital timestamp value %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
+						fflush(error_file);
+						//TODO if non existent object return -1;
+					}else{
+						time_stamp = MmsValue_toUint32(timeStamp);
+					}
 				
-				//Second Element DataState
-				dataSetElem = MmsValue_getElement(dataSetValue, 1);
-				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get digital DataState %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
-					fflush(error_file);
-					return -1;
+					//Second Element DataState
+					dataSetElem = MmsValue_getElement(dataSetValue, 1);
+					if(dataSetElem == NULL) {
+						fprintf(error_file, "ERROR - could not get digital DataState %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
+						fflush(error_file);
+						//TODO if non existent object return -1;
+					}else {
+						data_state = dataSetElem->value.bitString.buf[0];
+					}
 				}
-				handle_digital_integrity(dataSetElem->value.bitString.buf[0], idx, time_stamp);
+				handle_digital_integrity(data_state, idx, time_stamp);
 
 
 			} else if(dataset_conf[offset].type == DATASET_EVENTS){
+				data_state = 0;
 				//First element Data_TimeStampExtended
 				dataSetElem = MmsValue_getElement(dataSetValue, 0);
 				if(dataSetElem == NULL) {
 					fprintf(error_file, "ERROR - could not get event Data_TimeStampExtended %s - nponto %d\n", events[idx].id, events[idx].nponto);
 					fflush(error_file);
-					return -1;
-				}
-				timeStamp = MmsValue_getElement(dataSetElem, 0);
+					time(&time_stamp); //use system time stamp
+					//TODO if non existent object return -1;
+				}else{
+					timeStamp = MmsValue_getElement(dataSetElem, 0);
 
-				if(timeStamp == NULL) {
-					fprintf(error_file, "ERROR - could not get event timestamp value %s - nponto %d\n", events[idx].id, events[idx].nponto);
-					fflush(error_file);
-					return -1;
+					if(timeStamp == NULL) {
+						fprintf(error_file, "ERROR - could not get event timestamp value %s - nponto %d\n", events[idx].id, events[idx].nponto);
+						fflush(error_file);
+						return -1;
+					}
+					time_stamp = MmsValue_toUint32(timeStamp);
+					
+					//Second Element DataState
+					dataSetElem = MmsValue_getElement(dataSetValue, 1);
+					if(dataSetElem == NULL) {
+						fprintf(error_file, "ERROR - could not get event DataState %s - nponto %d\n", events[idx].id, events[idx].nponto);
+						fflush(error_file);
+						//TODO if non existent object return -1;
+					}else {
+						data_state = dataSetElem->value.bitString.buf[0];
+					}
+
 				}
-				time_stamp = MmsValue_toUint32(timeStamp);
-				
-				//Second Element DataState
-				dataSetElem = MmsValue_getElement(dataSetValue, 1);
-				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get event DataState %s - nponto %d\n", events[idx].id, events[idx].nponto);
-					fflush(error_file);
-					return -1;
-				}
-				handle_event_integrity(dataSetElem->value.bitString.buf[0], idx, time_stamp);
+				handle_event_integrity(data_state, idx, time_stamp);
 		
 			} else if(dataset_conf[offset].type == DATASET_COMMANDS){
 			/*	//First element Data_TimeStampExtended
