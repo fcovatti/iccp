@@ -15,7 +15,7 @@ int check_connection(MmsConnection con, FILE *    error_file);
 
 int connect_to_server(MmsConnection con, char * server);
 
-static inline void print_value (char state, bool ana, time_t time_stamp, char * state_off, char * state_on) {
+static inline void print_value (char state, bool ana, time_t time_stamp, char * state_on, char * state_off) {
 	struct tm * time_result;
 	MmsValue * value = MmsValue_newBitString(8);
 	memcpy(value->value.bitString.buf, &state, 1);
@@ -29,9 +29,9 @@ static inline void print_value (char state, bool ana, time_t time_stamp, char * 
 	if (!ana) {
 		//ESTADO
 		if (MmsValue_getBitStringBit(value,0) && !MmsValue_getBitStringBit(value,1)) {
-			printf("1-%-16s |", state_on);
+			printf("1-%-16s |", state_off);
 		}else if (!MmsValue_getBitStringBit(value,0) && MmsValue_getBitStringBit(value,1)) {
-			printf("0-%-16s |", state_off);
+			printf("0-%-16s |", state_on);
 		} else {
 			printf ("       Invalid    |");
 		}

@@ -82,8 +82,9 @@ int main (int argc, char ** argv){
 	}
 
 	if(strcmp(argv[1],"nponto") == 0 && argc == 3) {
-		char valor_on[16] = "";
-		char valor_off[16] = "";
+		char state_off[16] = "";
+		char state_on[16] = "";
+		char id_ponto[25] = "";
 		nponto = atoi(argv[2]);
 		printf("Searching changes in nponto %d\n\n", nponto);
 		
@@ -103,7 +104,7 @@ int main (int argc, char ** argv){
 				return -1;
 			}
 			while ( fgets(line, 300, file)){
-				if(sscanf(line, "%d %*d %*22s %*c %31s %*d %*d %*d %*d %*c %*d %*d %*f %*f %*d %*d %*d %*f %44c", &nponto_file,  valores, descritivo ) <1)
+				if(sscanf(line, "%d %*d %22s %*c %31s %*d %*d %*d %*d %*c %*d %*d %*f %*f %*d %*d %*d %*f %44c", &nponto_file, id_ponto,  valores, descritivo ) <1)
 				//if(sscanf(line, "%d ", &nponto_file) <1)
 					break;
 				if (nponto == nponto_file){
@@ -113,17 +114,17 @@ int main (int argc, char ** argv){
 					for ( i=0; i <35; i++) {
 						if (valores[i] == '/' ){
 							value_split=i;
-							valor_off[i]=0;
+							state_on[i]=0;
 							continue;
 						}
 						if(value_split){
 							if (valores[i] == 0 ) {
-								valor_on[i-value_split-1] =0;
+								state_off[i-value_split-1] =0;
 								break;
 							}else
-								valor_on[i-value_split-1] = valores[i];
+								state_off[i-value_split-1] = valores[i];
 						}else
-							valor_off[i] = valores[i];
+							state_on[i] = valores[i];
 
 					}
 					break;
@@ -141,8 +142,8 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&analog,1,sizeof(data_analog_out), file);
 			if(nponto == analog.nponto) {
-				printf("%7d |",analog.nponto);
-				printf("%11.2f %-6s |",analog.f, valor_off);
+				printf(" %7d - %25s |", analog.nponto, id_ponto);
+				printf("%11.2f %-6s |",analog.f, state_on);
 				print_value(analog.state, 1 , analog.time_stamp, "","");
 			}
 		}
@@ -155,8 +156,8 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
-				printf("%7d |",digital.nponto);
-				print_value(digital.state, 0 , digital.time_stamp, valor_off, valor_on);
+				printf(" %7d - %25s |", digital.nponto, id_ponto);
+				print_value(digital.state, 0 , digital.time_stamp, state_on, state_off);
 			}
 		}
 		fclose(file);
@@ -168,8 +169,8 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
-				printf("%7d |",digital.nponto);
-				print_value(digital.state, 0 , digital.time_stamp, valor_off, valor_on);
+				printf(" %7d - %25s |", digital.nponto, id_ponto);
+				print_value(digital.state, 0 , digital.time_stamp, state_on, state_off);
 			}
 		}
 		fclose(file);

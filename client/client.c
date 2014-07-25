@@ -14,8 +14,9 @@
 
 /* Defines for code debugging*/
 #define HANDLE_DIGITAL_DATA_DEBUG 1
-#define HANDLE_ANALOG_DATA_DEBUG 1
+//#define HANDLE_ANALOG_DATA_DEBUG 1
 #define HANDLE_EVENTS_DATA_DEBUG 1
+#define REPORTS_ONLY_DATA_DEBUG 1
 #define DATA_LOG 1
 
 
@@ -49,27 +50,33 @@ static int handle_analog_state(float value, unsigned char state, int index,time_
 static int handle_digital_state(unsigned char state, int index, time_t time_stamp);
 static int handle_event_state(unsigned char state, int index, time_t time_stamp);
 
-static int handle_analog_report(float value, unsigned char state, int index,time_t time_stamp){
-	return handle_analog_state(value,state,index,time_stamp);
+void handle_analog_report(float value, unsigned char state, int index,time_t time_stamp){
+	handle_analog_state(value,state,index,time_stamp);
 }
 
-static int handle_digital_report(unsigned char state, int index,time_t time_stamp){
-	return handle_digital_state(state, index, time_stamp);
+void handle_digital_report(unsigned char state, int index,time_t time_stamp){
+	handle_digital_state(state, index, time_stamp);
 }
 
-static int handle_event_report(unsigned char state, int index,time_t time_stamp){
-	return handle_event_state(state, index, time_stamp);
+void handle_event_report(unsigned char state, int index,time_t time_stamp){
+	handle_event_state(state, index, time_stamp);
 }
 
-static int handle_analog_integrity(float value, unsigned char state, int index,time_t time_stamp){
-	return handle_analog_state(value,state,index,time_stamp);
+void handle_analog_integrity(float value, unsigned char state, int index,time_t time_stamp){
+#ifndef REPORTS_ONLY_DATA_DEBUG
+	handle_analog_state(value,state,index,time_stamp);
+#endif
 }
-static int handle_digital_integrity(unsigned char state, int index,time_t time_stamp){
-	return handle_digital_state(state, index, time_stamp);
+void handle_digital_integrity(unsigned char state, int index,time_t time_stamp){
+#ifndef REPORTS_ONLY_DATA_DEBUG
+	handle_digital_state(state, index, time_stamp);
+#endif
 }
 
-static int handle_event_integrity(unsigned char state, int index,time_t time_stamp){
-	return handle_event_state(state, index, time_stamp);
+void handle_event_integrity(unsigned char state, int index,time_t time_stamp){
+#ifndef REPORTS_ONLY_DATA_DEBUG
+	handle_event_state(state, index, time_stamp);
+#endif
 }
 
 static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp){
@@ -91,7 +98,7 @@ static int handle_analog_state(float value, unsigned char state, int index,time_
 		analog[index].state = state;
 		analog[index].time_stamp = time_stamp;
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_off);
+		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp, "", "");
 #endif
 	}
@@ -116,7 +123,7 @@ static int handle_digital_state(unsigned char state, int index, time_t time_stam
 		digital[index].time_stamp = time_stamp;
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
 		printf("%25s: ", digital[index].id);
-		print_value(state,0, time_stamp,digital[index].state_off, digital[index].state_on);
+		print_value(state,0, time_stamp,digital[index].state_on, digital[index].state_off);
 #endif
 	}
 	return 0;
@@ -140,7 +147,7 @@ static int handle_event_state(unsigned char state, int index, time_t time_stamp)
 		events[index].time_stamp = time_stamp;
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
 		printf("%25s: ", events[index].id);
-		print_value(state,0, time_stamp,events[index].state_off, events[index].state_on);
+		print_value(state,0, time_stamp,events[index].state_on, events[index].state_off);
 #endif
 	}
 	return 0;
@@ -696,18 +703,18 @@ static int read_configuration() {
 				for ( i=0; i <35; i++) {
 					if (state_name[i] == '/' ){
 						state_split=i;
-						events[num_of_event_ids].state_off[i]=0;
+						events[num_of_event_ids].state_on[i]=0;
 						continue;
 					}
 					if(state_split){
 						if (state_name[i] == 0 ) {
-							events[num_of_event_ids].state_on[i-state_split-1]=0;
+							events[num_of_event_ids].state_off[i-state_split-1]=0;
 							break;
 						}else
-							events[num_of_event_ids].state_on[i-state_split-1] = state_name[i];
+							events[num_of_event_ids].state_off[i-state_split-1] = state_name[i];
 
 					}else
-						events[num_of_event_ids].state_off[i]=state_name[i];
+						events[num_of_event_ids].state_on[i]=state_name[i];
 				}
 
 				num_of_event_ids++;
@@ -720,17 +727,17 @@ static int read_configuration() {
 				for ( i=0; i <35; i++) {
 					if (state_name[i] == '/' ){
 						state_split=i;
-						digital[num_of_digital_ids].state_off[i]=0;
+						digital[num_of_digital_ids].state_on[i]=0;
 						continue;
 					}
 					if(state_split){
 						if (state_name[i] == 0 ) {
-							digital[num_of_digital_ids].state_on[i-state_split-1] =0;
+							digital[num_of_digital_ids].state_off[i-state_split-1] =0;
 							break;
 						}else
-							digital[num_of_digital_ids].state_on[i-state_split-1] = state_name[i];
+							digital[num_of_digital_ids].state_off[i-state_split-1] = state_name[i];
 					}else
-						digital[num_of_digital_ids].state_off[i]=state_name[i];
+						digital[num_of_digital_ids].state_on[i]=state_name[i];
 				}
 
 
@@ -739,7 +746,7 @@ static int read_configuration() {
 			else if(type == 'A'){
 				memcpy(analog[num_of_analog_ids].id,id_ponto,25);
 				analog[num_of_analog_ids].nponto = nponto;
-				memcpy(analog[num_of_analog_ids].state_off,state_name,  16);
+				memcpy(analog[num_of_analog_ids].state_on,state_name,  16);
 				num_of_analog_ids++;
 			} //Unknown 
 			else {
