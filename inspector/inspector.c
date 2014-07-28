@@ -54,7 +54,7 @@ int main (int argc, char ** argv){
 	}
 	//CONFIG_FILE
 	if(config_lookup_string(&cfg, "CONFIG_FILE", &cfg_file)){
-		printf("CONFIG_FILE %s\n", cfg_file);
+		//printf("CONFIG_FILE %s\n", cfg_file);
 	}
 	else{
 	   printf("\n no CONFIG_FILE on the configuration file\n");
