@@ -9,9 +9,8 @@
 #include "mms_client_connection.h"
 #include "util.h"
 #include "client.h"
-#include "config.h"
 
-void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported)
+void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported)
 {
 	//global
 	MmsError mmsError;
@@ -132,7 +131,7 @@ void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer
 
 	//0.1
 	ielem = MmsValue_getElement(elem, 1);
-	MmsValue_setVisibleString(ielem, IDICCP);
+	MmsValue_setVisibleString(ielem, id_iccp);
 
 	//0.2
 	ielem = MmsValue_getElement(elem, 2);
@@ -195,19 +194,19 @@ void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer
 	elem = MmsValue_getElement(dataset, 12);
 	MmsValue_setInt32(elem, 0);
 
-	MmsConnection_writeVariable(con, &mmsError, IDICCP, ts_name, dataset );
+	MmsConnection_writeVariable(con, &mmsError, id_iccp, ts_name, dataset );
 
 	MmsVariableSpecification_destroy(typeSpec);
 	MmsValue_delete(dataset);
 }
 
-MmsValue * get_next_transferset(MmsConnection con, FILE * error_file)
+MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_file)
 {
 //READ DATASETS
 	MmsError mmsError;
 	MmsValue* returnValue = NULL;
 	MmsValue* value;
-	value = MmsConnection_readVariable(con, &mmsError, IDICCP, "Next_DSTransfer_Set");
+	value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Next_DSTransfer_Set");
 	
 	if (value == NULL){                                                                                                                
 		fprintf(error_file, "ERROR - reading transfer set value failed! %d\n", mmsError);                                                                                                   
@@ -226,7 +225,7 @@ MmsValue * get_next_transferset(MmsConnection con, FILE * error_file)
 		return NULL;
 	} else {
 		//printf("Read transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
-		if(strncmp(MmsValue_toString(ts_elem), IDICCP, sizeof(IDICCP)) != 0){
+		if(strncmp(MmsValue_toString(ts_elem), id_iccp, sizeof(id_iccp)) != 0){
 			fprintf(error_file, "ERROR - Wrong domain id\n");
 			return NULL;
 		}
@@ -245,12 +244,12 @@ MmsValue * get_next_transferset(MmsConnection con, FILE * error_file)
 }
 
 
-int check_connection(MmsConnection con, FILE *	error_file) {
+int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 	static int loop_error;
 	MmsError mmsError;
 	MmsValue* loop_value;
 
-	loop_value = MmsConnection_readVariable(con, &mmsError, IDICCP, "Bilateral_Table_ID");
+	loop_value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Bilateral_Table_ID");
 
 	if (loop_value == NULL){ 
 		printf("loop value == NULL \n");

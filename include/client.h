@@ -12,6 +12,8 @@
 #include "mms_client_connection.h"
 #include "client.h"
 
+#define ICCP_CLIENT_CONFIG_FILE "iccp_client_config.txt"
+
 // OFFSET for the index in received reports
 #define INDEX_OFFSET 3
 
@@ -26,6 +28,26 @@
 
 // Size of digital data in RULE 0 Information reports 
 #define RULE0_DIGITAL_REPORT_SIZE 7
+
+#define MAX_ID_ICCP_NAME 10
+#define MAX_SRV_NAME 20
+
+// Max size of the dataset. IMPORTANT (bigger than 600 can cause code crash)
+#define DATASET_MAX_SIZE 500
+
+// MAx number of datasets allowed on the client
+#define DATASET_ANALOG_MAX_NUMBER 150
+
+// MAx number of datasets allowed on the client
+#define DATASET_DIGITAL_MAX_NUMBER 150
+
+// MAx number of datasets allowed on the client
+#define DATASET_EVENTS_MAX_NUMBER 150
+
+// Name of the data received log file
+#define DATA_ANALOG_LOG "iccp_data_analog.bin"
+#define DATA_DIGITAL_LOG "iccp_data_digital.bin"
+#define DATA_EVENTS_LOG "iccp_data_events.bin"
 
 
 // name size of the standard dataset created

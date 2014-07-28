@@ -7,11 +7,11 @@
 #include "mms_value_internal.h"
 #include "mms_client_connection.h"
 
-void write_dataset(MmsConnection con, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported);
+void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported);
 
-MmsValue * get_next_transferset(MmsConnection con, FILE * error_file);
+MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_file);
 
-int check_connection(MmsConnection con, FILE *    error_file);
+int check_connection(MmsConnection con, char * id_iccp, FILE *    error_file);
 
 int connect_to_server(MmsConnection con, char * server);
 

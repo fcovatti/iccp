@@ -14,7 +14,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "config.h"
+#include <libconfig.h>
 #include "client.h"
 #include "util.h"
 
@@ -30,10 +30,35 @@ int main (int argc, char ** argv){
 	FILE * file = NULL;
 	data_analog_out analog;
 	data_digital_out digital;
+	config_t cfg;
+	const char *str1;
+	const char *cfg_file;
+
 	signal(SIGINT, sigint_handler);
 
 	if (argc < 2) {
 		printf("Options:\n    analog: dump all analog variations\n    digital: dump all digital state changes\n    events: dump all events received\n    nponto <number>: find all changes in nponto\n");
+		return -1;
+	}
+
+	/*****************
+	 * READ ICCP CONFIGURATION PARAMETERS
+	 **********/
+
+	config_init(&cfg);
+
+	if(!config_read_file(&cfg, ICCP_CLIENT_CONFIG_FILE)){
+		printf("\n %s %d", config_error_file(&cfg), config_error_line(&cfg));
+		config_destroy(&cfg);
+		return -1;
+	}
+	//CONFIG_FILE
+	if(config_lookup_string(&cfg, "CONFIG_FILE", &cfg_file)){
+		printf("CONFIG_FILE %s\n", cfg_file);
+	}
+	else{
+	   printf("\n no CONFIG_FILE on the configuration file\n");
+		config_destroy(&cfg);
 		return -1;
 	}
 
@@ -89,18 +114,18 @@ int main (int argc, char ** argv){
 		printf("Searching changes in nponto %d\n\n", nponto);
 		
 		// print sage_id description
-		file = fopen(CONFIG_FILE, "r");
+		file = fopen(cfg_file, "r");
 		if(file==NULL){
-			printf("Error, cannot open configuration file %s\n", CONFIG_FILE);
+			printf("Error, cannot open configuration file %s\n", cfg_file);
 			return -1;
 		} else{
 			char line[300];
 			unsigned int nponto_file = 0;
 			char valores[35];
 			char descritivo[45];
-			//first two rows of CONFIG_FILE are the reader, discard them
+			//first two rows of cfg_file are the reader, discard them
 			if(!fgets(line, 300, file) || !fgets(line, 300, file)){
-				printf("Error reading %s file header\n", CONFIG_FILE);
+				printf("Error reading %s file header\n", cfg_file);
 				return -1;
 			}
 			while ( fgets(line, 300, file)){
@@ -132,6 +157,7 @@ int main (int argc, char ** argv){
 			}
 		}
 		fclose(file);
+		config_destroy(&cfg);
 
 		printf(" ");
 		file = fopen(DATA_ANALOG_LOG, "r");

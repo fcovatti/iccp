@@ -6,11 +6,11 @@
 #include <ctype.h>
 #include <malloc.h>
 #include <signal.h>
+#include <libconfig.h>
 #include "mms_client_connection.h"
 #include "mms_value_internal.h"
 #include "client.h"
 #include "util.h"
-#include "config.h"
 
 /* Defines for code debugging*/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
@@ -46,6 +46,9 @@ static FILE * data_file_events = NULL;
 #endif
 
 static FILE * error_file = NULL;
+static char IDICCP[MAX_ID_ICCP_NAME];
+static char srv1[MAX_SRV_NAME], srv2[MAX_SRV_NAME], srv3[MAX_SRV_NAME], srv4[MAX_SRV_NAME]; 
+int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
 
 static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp);
 static int handle_digital_state(unsigned char state, int index, time_t time_stamp);
@@ -679,20 +682,184 @@ static int read_configuration() {
 	int state_data=0;
 	char type = 0;
 	int i;
+	config_t cfg;
+	const char *str1;
+	const char *id_iccp, *cfg_file, *cfg_log, *error_log;
 
-	//configuration = calloc(DATASET_MAX_SIZE*DATASET_MAX_NUMBER, sizeof(data_config) ); 
+
+	/*****************
+	 * READ ICCP CONFIGURATION PARAMETERS
+	 **********/
+
+	config_init(&cfg);
+
+	if(!config_read_file(&cfg, ICCP_CLIENT_CONFIG_FILE)){
+		printf("\n %s %d", config_error_file(&cfg), config_error_line(&cfg));
+		config_destroy(&cfg);
+		return -1;
+	}
+
+	//IDICCP
+	if(config_lookup_string(&cfg, "IDICCP", &str1)){
+		snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", str1);
+		printf("IDICCP %s\n", IDICCP);
+	}
+	else{
+	   printf("\n no IDICCP on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//SERVER_NAME_1
+	if(config_lookup_string(&cfg, "SERVER_NAME_1",&str1)){
+		snprintf(srv1, MAX_SRV_NAME, "%s", str1);
+		printf("SERVER_NAME_1 %s\n", srv1);
+	}
+	else{
+	   printf("\n no SERVER_NAME_1 on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//SERVER_NAME_2
+	if(config_lookup_string(&cfg, "SERVER_NAME_2",&str1)){
+		snprintf(srv2, MAX_SRV_NAME, "%s", str1);
+		printf("SERVER_NAME_2 %s\n", srv2);
+	}
+	else{
+	   printf("\n no SERVER_NAME_2 on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//SERVER_NAME_3
+	if(config_lookup_string(&cfg, "SERVER_NAME_3", &str1)){
+		snprintf(srv3, MAX_SRV_NAME, "%s", str1);
+		printf("SERVER_NAME_3 %s\n", srv3);
+	}
+	else{
+	   printf("\n no SERVER_NAME_3 on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//SERVER_NAME_4
+	if(config_lookup_string(&cfg, "SERVER_NAME_4", &str1)){
+		snprintf(srv4, MAX_SRV_NAME, "%s", str1);
+		printf("SERVER_NAME_4 %s\n", srv4);
+	}
+	else{
+	   printf("\n no SERVER_NAME_4 on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//CONFIG_FILE
+	if(config_lookup_string(&cfg, "CONFIG_FILE", &cfg_file)){
+		printf("CONFIG_FILE %s\n", cfg_file);
+	}
+	else{
+	   printf("\n no CONFIG_FILE on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//CONFIG_LOG
+	if(config_lookup_string(&cfg, "CONFIG_LOG", &cfg_log)){
+		printf("CONFIG_LOG %s\n", cfg_log);
+	}
+	else{
+	   printf("\n no CONFIG_LOG on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//ERROR_LOG
+	if(config_lookup_string(&cfg, "ERROR_LOG", &error_log)){
+		printf("ERROR_LOG %s\n", error_log);
+	}
+	else{
+	   printf("\n no ERROR_LOG on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+
+	//DATASET_ANALOG_INTEGRITY_TIME
+	if(config_lookup_int(&cfg, "DATASET_ANALOG_INTEGRITY_TIME", &analog_gi)){
+		printf("DATASET_ANALOG_INTEGRITY_TIME %d\n", analog_gi);
+	}
+	else{
+	   printf("\n no DATASET_ANALOG_INTEGRITY_TIME on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//DATASET_DIGITAL_INTEGRITY_TIME
+	if(config_lookup_int(&cfg, "DATASET_DIGITAL_INTEGRITY_TIME", &digital_gi)){
+		printf("DATASET_DIGITAL_INTEGRITY_TIME %d\n", digital_gi);
+	}
+	else{
+	   printf("\n no DATASET_DIGITAL_INTEGRITY_TIME on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//DATASET_EVENTS_INTEGRITY_TIME
+	if(config_lookup_int(&cfg, "DATASET_EVENTS_INTEGRITY_TIME", &events_gi)){
+		printf("DATASET_EVENTS_INTEGRITY_TIME %d\n", events_gi);
+	}
+	else{
+	   printf("\n no DATASET_EVENTS_INTEGRITY_TIME on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//DATASET_ANALOG_BUFFER_INTERVAL
+	if(config_lookup_int(&cfg, "DATASET_ANALOG_BUFFER_INTERVAL", &analog_buf)){
+		printf("DATASET_ANALOG_BUFFER_INTERVAL %d\n", analog_buf);
+	}
+	else{
+	   printf("\n no DATASET_ANALOG_BUFFER_INTERVAL on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//DATASET_DIGITAL_BUFFER_INTERVAL
+	if(config_lookup_int(&cfg, "DATASET_DIGITAL_BUFFER_INTERVAL", &digital_buf)){
+		printf("DATASET_DIGITAL_BUFFER_INTERVAL %d\n", digital_buf);
+	}
+	else{
+	   printf("\n no DATASET_DIGITAL_BUFFER_INTERVAL on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+	//DATASET_EVENTS_BUFFER_INTERVAL
+	if(config_lookup_int(&cfg, "DATASET_EVENTS_BUFFER_INTERVAL", &events_buf)){
+		printf("DATASET_EVENTS_BUFFER_INTERVAL %d\n", events_buf);
+	}
+	else{
+	   printf("\n no DATASET_EVENTS_BUFFER_INTERVAL on the configuration file\n");
+		config_destroy(&cfg);
+		return -1;
+	}
+
+
+
+	/*****************
+	 * START CONFIGURATIONS
+	 **********/
+
+	// OPEN ERROR LOG
+	error_file = fopen(error_log, "w");
+	if(error_file==NULL){
+		printf("Error, cannot open error log file %s\n",error_log);
+		fclose(error_file);
+		return -1;
+	}
+
+
     analog = calloc(DATASET_MAX_SIZE*DATASET_ANALOG_MAX_NUMBER, sizeof(data_config) ); 
     digital = calloc(DATASET_MAX_SIZE*DATASET_DIGITAL_MAX_NUMBER, sizeof(data_config) ); 
     events  = calloc(DATASET_MAX_SIZE*DATASET_EVENTS_MAX_NUMBER, sizeof(data_config) ); 
 
-	file = fopen(CONFIG_FILE, "r");
+
+	file = fopen(cfg_file, "r");
 	if(file==NULL){
-		printf("Error, cannot open configuration file %s\n", CONFIG_FILE);
+		printf("Error, cannot open configuration file %s\n", cfg_file);
 		return -1;
 	} else{
 		//first two rows of CONFIG_FILE are the reader, discard them
 		if(!fgets(line, 300, file) || !fgets(line, 300, file)){
-			printf("Error reading %s file header\n", CONFIG_FILE);
+			printf("Error reading %s file header\n", cfg_file);
 			return -1;
 		}
 
@@ -787,9 +954,9 @@ static int read_configuration() {
 		}
 	}
 
-	log_file = fopen(CONFIG_LOG, "w");
+	log_file = fopen(cfg_log, "w");
 	if(log_file==NULL){
-		printf("Error, cannot open configuration log file %s\n", CONFIG_LOG);
+		printf("Error, cannot open configuration log file %s\n", cfg_log);
 		fclose(file);
 		return -1;
 	} 
@@ -829,6 +996,8 @@ static int read_configuration() {
 	for (i=0; i < num_of_datasets; i++) {
 		snprintf(dataset_conf[i].id, DATASET_NAME_SIZE, "ds_%03d", i);
 	}
+
+	config_destroy(&cfg);
 	fclose(file);
 	fclose(log_file);
 	return 0;
@@ -894,25 +1063,17 @@ int main (int argc, char ** argv){
 	}
 #endif
 
-	// OPEN ERROR LOG
-	error_file = fopen(ERROR_LOG, "w");
-	if(error_file==NULL){
-		printf("Error, cannot open error log file %s\n", ERROR_LOG);
-		fclose(error_file);
-		return -1;
-	}
-
 	//INITIALIZE CONNECTION (TODO: add connection handler)
-	if ((connect_to_server(con, SERVER_NAME_1) < 0)){
+	if ((connect_to_server(con, srv1) < 0)){
 		MmsConnection_destroy(con);
 		con = MmsConnection_create();
-		if ((connect_to_server(con, SERVER_NAME_2) < 0)){
+		if ((connect_to_server(con, srv2) < 0)){
 			MmsConnection_destroy(con);
 			con = MmsConnection_create();
-			if ((connect_to_server(con, SERVER_NAME_3) < 0)){
+			if ((connect_to_server(con, srv3) < 0)){
 				MmsConnection_destroy(con);
 				con = MmsConnection_create();
-				if ((connect_to_server(con, SERVER_NAME_4) < 0)){
+				if ((connect_to_server(con, srv4) < 0)){
 					cleanup_variables(con);
 					return -1;
 				}
@@ -929,7 +1090,7 @@ int main (int argc, char ** argv){
 	// CREATE TRASNFERSETS ON REMOTE SERVER	
 	printf("creating transfer sets\n");
 	for (i=0; i < num_of_datasets; i++){
-		MmsValue *transfer_set_dig  = get_next_transferset(con, error_file);
+		MmsValue *transfer_set_dig  = get_next_transferset(con,IDICCP,  error_file);
 		if( transfer_set_dig == NULL) {	
 			printf("Could not create transfer set for digital data\n");
 			cleanup_variables(con);
@@ -951,11 +1112,11 @@ int main (int argc, char ** argv){
 	printf("writing data sets\n");
 	for (i=0; i < num_of_datasets; i++){
 		if(dataset_conf[i].type == DATASET_ANALOG) 
-			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_ANALOG_BUFFER_INTERVAL, DATASET_ANALOG_INTEGRITY_TIME, 0);
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, analog_gi, 0);
 		else if(dataset_conf[i].type == DATASET_DIGITAL)
-			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_DIGITAL_BUFFER_INTERVAL, DATASET_DIGITAL_INTEGRITY_TIME, 1);
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf, digital_gi, 1);
 		else if(dataset_conf[i].type == DATASET_EVENTS)
-			write_dataset(con, dataset_conf[i].id, dataset_conf[i].ts, DATASET_EVENTS_BUFFER_INTERVAL, DATASET_EVENTS_INTEGRITY_TIME, 1);
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, events_gi, 1);
 		else{
 			printf("unknown write dataset type\n");
 			cleanup_variables(con);
@@ -974,7 +1135,7 @@ int main (int argc, char ** argv){
 
 	// LOOP TO MANTAIN CONNECTION ACTIVE	
 	while(running) {
-		if (check_connection(con, error_file) < 0)
+		if (check_connection(con,IDICCP,  error_file) < 0)
 			break;
 		sleep(2);//sleep 2s
 	}
