@@ -237,7 +237,7 @@ MmsValue * get_next_transferset(MmsConnection con, FILE * error_file)
 		fprintf(error_file, "ERROR - reading transfer set value 2 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	} else {
-		printf("Read transfer set name: %s\n", MmsValue_toString(ts_elem));
+		//printf("Read transfer set name: %s\n", MmsValue_toString(ts_elem));
 		returnValue = MmsValue_newMmsString(MmsValue_toString(ts_elem));
 	}
 	MmsValue_delete(value); 

@@ -482,44 +482,63 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							   }
 							   printf("\n"); */
 						
+
+							//RULE 0
+							//first byte is the rule
 							if(dataSetValue->value.octetString.buf[0] == 0) {
-
-
 								if(dataSetValue->value.octetString.size == 0) {
 									fprintf(error_file, "ERROR - empty octetString\n");
 									fflush(error_file);
 									return;
+								}else if(dataSetValue->value.octetString.size < 2) {
+									fprintf(error_file, "ERROR - no index in the octed string\n");
+									fflush(error_file);
+									return;
 								}
 
-
-								octet_offset = 1; //first byte is the rule
+								octet_offset = 1; 
 								index = dataset_conf[offset].offset; // config index
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
-										time_data time_value;
-										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
-										octet_offset = octet_offset + 7;
+										if(octet_offset+ RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
+											time_data time_value;
+											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+											handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										} else {
+											fprintf(error_file, "ERROR - wrong digital report octet size %d, offset %d - data %d bytes - ds %d, idx %d \n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index );
+											fflush(error_file);
+										}
+										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
-										time_data time_value;
-										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
-										octet_offset = octet_offset + 7;
+										if(octet_offset+RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
+											time_data time_value;
+											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+											handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+										} else {
+											fprintf(error_file, "ERROR - wrong event report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index);
+											fflush(error_file);
+										}
+										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
-										float_data data_value;
-										data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-										handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
-										octet_offset = octet_offset + 5;
+										if(octet_offset+RULE0_ANALOG_REPORT_SIZE <= dataSetValue->value.octetString.size) {
+											float_data data_value;
+											data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+											data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+											data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+											data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+											handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+										} else {
+											fprintf(error_file, "ERROR - wrong analog report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_ANALOG_REPORT_SIZE, offset, index);
+											fflush(error_file);
+										}
+										octet_offset = octet_offset + RULE0_ANALOG_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_COMMANDS){
 										printf("command no report\n");
 									} else {
@@ -531,7 +550,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								}
 
 
-								//RULE 0
 								//TODO: implement rule 0 handling
 							}else if(dataSetValue->value.octetString.buf[0] == 1) {
 								//RULE 1 - not implemented
@@ -555,55 +573,44 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									index = index + dataset_conf[offset].offset; // config index
 									
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
-										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
-											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+										if((RULE2_DIGITAL_REPORT_SIZE+octet_offset) <= dataSetValue->value.octetString.size ) {
+											time_data time_value;
+											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
+											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
+											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
+											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
+											handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										}else {
+											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE2_DIGITAL_REPORT_SIZE, offset, index );
 											fflush(error_file);
-											MmsValue_delete(value);
-											//LinkedList_destroy(attributes);
-											return;
 										}
-										time_data time_value;
-										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
-										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
-										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
-										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-										handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
 										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
 
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
-										if(dataSetValue->value.octetString.size < (RULE2_DIGITAL_REPORT_SIZE+octet_offset)) {
-											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+										if( (RULE2_DIGITAL_REPORT_SIZE+octet_offset) <= dataSetValue->value.octetString.size) {
+											time_data time_value;
+											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
+											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
+											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
+											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
+											handle_event_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+										}else{
+											fprintf(error_file,"ERROR - Wrong size of event report %d, octet_offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE2_DIGITAL_REPORT_SIZE, offset, index  );
 											fflush(error_file);
-											MmsValue_delete(value);
-											//LinkedList_destroy(attributes);
-											return;
 										}
-										time_data time_value;
-										time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
-										time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
-										time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
-										time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-										handle_event_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
 										octet_offset = octet_offset + RULE2_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
-										float_data data_value;
-										if(dataSetValue->value.octetString.size < (RULE2_ANALOG_REPORT_SIZE + octet_offset)) {
-											fprintf(error_file,"ERROR - Wrong size of analog report %d, octet_offset %d\n",dataSetValue->value.octetString.size, octet_offset );
+										if((RULE2_ANALOG_REPORT_SIZE + octet_offset)<= dataSetValue->value.octetString.size ) {
+											float_data data_value;
+											data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
+											data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
+											data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
+											data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
+											handle_analog_report(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
+										}else {
+											fprintf(error_file,"ERROR - Wrong size of analog report %d, octet_offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE2_ANALOG_REPORT_SIZE, offset, index  );
 											fflush(error_file);
-											MmsValue_delete(value);
-											//LinkedList_destroy(attributes);
-											return;
 										}
-										//char float_string[5];
-										data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset+2];
-										data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
-										data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
-										data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-
-										//MmsValue * analog_data = createAnalogValue(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6]);
-
-										handle_analog_report(data_value.f, dataSetValue->value.octetString.buf[octet_offset+6], index, time_stamp);
-
 										octet_offset = octet_offset + RULE2_ANALOG_REPORT_SIZE;
 									} else {
 										fprintf(error_file,"ERROR - unkonwn information report index %d\n", index);
@@ -789,17 +796,17 @@ static int read_configuration() {
 
 	fprintf(log_file, "***************ANALOG***********************\n");
 	for (i=0; i < num_of_analog_ids; i++) {
-		fprintf(log_file, "%d \t%s\t \n", analog[i].nponto,  analog[i].id);
+		fprintf(log_file, "%d %d \t%s\t \n",i, analog[i].nponto,  analog[i].id);
 	}
 
 	fprintf(log_file, "***************DIGITAL***********************\n");
 	for (i=0; i < num_of_digital_ids; i++) {
-		fprintf(log_file, "%d \t%s\t \n", digital[i].nponto,  digital[i].id);
+		fprintf(log_file, "%d %d \t%s\t \n",i, digital[i].nponto,  digital[i].id);
 	}
 
 	fprintf(log_file, "***************EVENTS***********************\n");
 	for (i=0; i < num_of_event_ids; i++) {
-		fprintf(log_file, "%d \t%s\t \n", events[i].nponto,  events[i].id);
+		fprintf(log_file, "%d %d \t%s\t \n",i, events[i].nponto,  events[i].id);
 	}
 
 	num_of_analog_datasets = num_of_analog_ids/DATASET_MAX_SIZE;
@@ -895,11 +902,22 @@ int main (int argc, char ** argv){
 		return -1;
 	}
 
-	//INITIALIZE CONNECTION (TODO: resolve memory leak and add connection handler)
-	if ((connect_to_server(con, SERVER_NAME_1) < 0) && (connect_to_server(con, SERVER_NAME_2) < 0) &&
-	   	(connect_to_server(con, SERVER_NAME_3) < 0) && (connect_to_server(con, SERVER_NAME_4) < 0)) {
-		cleanup_variables(con);
-		return -1;
+	//INITIALIZE CONNECTION (TODO: add connection handler)
+	if ((connect_to_server(con, SERVER_NAME_1) < 0)){
+		MmsConnection_destroy(con);
+		con = MmsConnection_create();
+		if ((connect_to_server(con, SERVER_NAME_2) < 0)){
+			MmsConnection_destroy(con);
+			con = MmsConnection_create();
+			if ((connect_to_server(con, SERVER_NAME_3) < 0)){
+				MmsConnection_destroy(con);
+				con = MmsConnection_create();
+				if ((connect_to_server(con, SERVER_NAME_4) < 0)){
+					cleanup_variables(con);
+					return -1;
+				}
+			}
+		}
 	}
 
 	// DELETE DATASETS WHICH WILL BE USED

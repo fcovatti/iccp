@@ -21,6 +21,13 @@
 // Size of digital data in RULE 2 Information reports 
 #define RULE2_DIGITAL_REPORT_SIZE 9
 
+// Size of analog data in RULE 0 Information reports
+#define RULE0_ANALOG_REPORT_SIZE 5
+
+// Size of digital data in RULE 0 Information reports 
+#define RULE0_DIGITAL_REPORT_SIZE 7
+
+
 // name size of the standard dataset created
 #define DATASET_NAME_SIZE 7
 
