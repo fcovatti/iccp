@@ -1,12 +1,12 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+//#include <pthread.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <ctype.h>
 #include <malloc.h>
 #include <signal.h>
-#include <libconfig.h>
 #include "mms_client_connection.h"
 #include "mms_value_internal.h"
 #include "client.h"
@@ -47,7 +47,7 @@ static FILE * data_file_events = NULL;
 
 static FILE * error_file = NULL;
 static char IDICCP[MAX_ID_ICCP_NAME];
-static char srv1[MAX_SRV_NAME], srv2[MAX_SRV_NAME], srv3[MAX_SRV_NAME], srv4[MAX_SRV_NAME]; 
+static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
 int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
 
 static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp);
@@ -659,7 +659,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 				i++;
 			}
 		//CONFIRM RECEPTION OF EVENT
+		printf("send unconfirmed\n");
 		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
+		printf("--send unconfirmed\n");
 		MmsValue_delete(value);
 		//LinkedList_destroy(attributes);
 	} else{
@@ -676,163 +678,108 @@ static int read_configuration() {
 	int origin = 0;
 	int event = 0;
 	unsigned int nponto = 0;
-	char id_ponto[25] = "";
-	char state_name[35] = "";
+	char id_ponto[MAX_STR_NAME] = "";
+	char state_name[MAX_STR_NAME] = "";
 	int state_split = 0;
 	int state_data=0;
 	char type = 0;
 	int i;
-	config_t cfg;
 	const char *str1;
-	const char *id_iccp, *cfg_file, *cfg_log, *error_log;
+	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME], cfg_log[MAX_STR_NAME], error_log[MAX_STR_NAME];
+	char config_param[MAX_STR_NAME], config_value[MAX_STR_NAME];
+	int cfg_params = 0;
 
 
 	/*****************
 	 * READ ICCP CONFIGURATION PARAMETERS
 	 **********/
 
-	config_init(&cfg);
-
-	if(!config_read_file(&cfg, ICCP_CLIENT_CONFIG_FILE)){
-		printf("\n %s %d", config_error_file(&cfg), config_error_line(&cfg));
-		config_destroy(&cfg);
+	file = fopen(ICCP_CLIENT_CONFIG_FILE, "r");
+	if(file==NULL){
+		printf("Error, cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
+		return -1;
+	} else{
+		while ( fgets(line, 300, file)){
+			if (line[0] == '/' && line[1]=='/')
+				continue;
+			if(sscanf(line, "%[^=]=\"%[^\";]; ",config_param, config_value) < 1)
+				break;
+			if(strcmp(config_param, "IDICCP") == 0){
+				snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", config_value);
+				printf("IDICCP=%s\n", IDICCP);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_1") == 0){
+				snprintf(srv1, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_1=%s\n", srv1);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_2") == 0){
+				snprintf(srv2, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_2=%s\n", srv2);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_3") == 0){
+				snprintf(srv3, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_3=%s\n", srv3);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_4") == 0){
+				snprintf(srv4, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_4=%s\n", srv4);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "CONFIG_FILE") == 0){
+				snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
+				printf("CONFIG_FILE=%s\n", cfg_file);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "CONFIG_LOG") == 0){
+				snprintf(cfg_log, MAX_STR_NAME, "%s", config_value);
+				printf("CONFIG_LOG=%s\n", cfg_log);
+				cfg_params++;
+			}if(strcmp(config_param, "ERROR_LOG") == 0){
+				snprintf(error_log, MAX_STR_NAME, "%s", config_value);
+				printf("ERROR_LOG=%s\n", error_log);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_ANALOG_INTEGRITY_TIME") == 0){
+				analog_gi = atoi(config_value);
+				printf("DATASET_ANALOG_INTEGRITY_TIME=%d\n", analog_gi);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_DIGITAL_INTEGRITY_TIME") == 0){
+				digital_gi = atoi(config_value);
+				printf("DATASET_DIGITAL_INTEGRITY_TIME=%d\n", digital_gi);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_EVENTS_INTEGRITY_TIME") == 0){
+				events_gi = atoi(config_value);
+				printf("DATASET_EVENTS_INTEGRITY_TIME=%d\n", events_gi);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_ANALOG_BUFFER_INTERVAL") == 0){
+				analog_buf = atoi(config_value);
+				printf("DATASET_ANALOG_BUFFER_INTERVAL=%d\n", analog_buf);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_DIGITAL_BUFFER_INTERVAL") == 0){
+				digital_buf = atoi(config_value);
+				printf("DATASET_DIGITAL_BUFFER_INTERVAL=%d\n", digital_buf);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "DATASET_EVENTS_BUFFER_INTERVAL") == 0){
+				events_buf = atoi(config_value);
+				printf("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
+				cfg_params++;
+			}
+				
+		}
+	}
+	if (cfg_params !=14){
+		printf("wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		return -1;
 	}
-
-	//IDICCP
-	if(config_lookup_string(&cfg, "IDICCP", &str1)){
-		snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", str1);
-		printf("IDICCP %s\n", IDICCP);
-	}
-	else{
-	   printf("\n no IDICCP on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//SERVER_NAME_1
-	if(config_lookup_string(&cfg, "SERVER_NAME_1",&str1)){
-		snprintf(srv1, MAX_SRV_NAME, "%s", str1);
-		printf("SERVER_NAME_1 %s\n", srv1);
-	}
-	else{
-	   printf("\n no SERVER_NAME_1 on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//SERVER_NAME_2
-	if(config_lookup_string(&cfg, "SERVER_NAME_2",&str1)){
-		snprintf(srv2, MAX_SRV_NAME, "%s", str1);
-		printf("SERVER_NAME_2 %s\n", srv2);
-	}
-	else{
-	   printf("\n no SERVER_NAME_2 on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//SERVER_NAME_3
-	if(config_lookup_string(&cfg, "SERVER_NAME_3", &str1)){
-		snprintf(srv3, MAX_SRV_NAME, "%s", str1);
-		printf("SERVER_NAME_3 %s\n", srv3);
-	}
-	else{
-	   printf("\n no SERVER_NAME_3 on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//SERVER_NAME_4
-	if(config_lookup_string(&cfg, "SERVER_NAME_4", &str1)){
-		snprintf(srv4, MAX_SRV_NAME, "%s", str1);
-		printf("SERVER_NAME_4 %s\n", srv4);
-	}
-	else{
-	   printf("\n no SERVER_NAME_4 on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//CONFIG_FILE
-	if(config_lookup_string(&cfg, "CONFIG_FILE", &cfg_file)){
-		printf("CONFIG_FILE %s\n", cfg_file);
-	}
-	else{
-	   printf("\n no CONFIG_FILE on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//CONFIG_LOG
-	if(config_lookup_string(&cfg, "CONFIG_LOG", &cfg_log)){
-		printf("CONFIG_LOG %s\n", cfg_log);
-	}
-	else{
-	   printf("\n no CONFIG_LOG on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//ERROR_LOG
-	if(config_lookup_string(&cfg, "ERROR_LOG", &error_log)){
-		printf("ERROR_LOG %s\n", error_log);
-	}
-	else{
-	   printf("\n no ERROR_LOG on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-
-	//DATASET_ANALOG_INTEGRITY_TIME
-	if(config_lookup_int(&cfg, "DATASET_ANALOG_INTEGRITY_TIME", &analog_gi)){
-		printf("DATASET_ANALOG_INTEGRITY_TIME %d\n", analog_gi);
-	}
-	else{
-	   printf("\n no DATASET_ANALOG_INTEGRITY_TIME on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//DATASET_DIGITAL_INTEGRITY_TIME
-	if(config_lookup_int(&cfg, "DATASET_DIGITAL_INTEGRITY_TIME", &digital_gi)){
-		printf("DATASET_DIGITAL_INTEGRITY_TIME %d\n", digital_gi);
-	}
-	else{
-	   printf("\n no DATASET_DIGITAL_INTEGRITY_TIME on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//DATASET_EVENTS_INTEGRITY_TIME
-	if(config_lookup_int(&cfg, "DATASET_EVENTS_INTEGRITY_TIME", &events_gi)){
-		printf("DATASET_EVENTS_INTEGRITY_TIME %d\n", events_gi);
-	}
-	else{
-	   printf("\n no DATASET_EVENTS_INTEGRITY_TIME on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//DATASET_ANALOG_BUFFER_INTERVAL
-	if(config_lookup_int(&cfg, "DATASET_ANALOG_BUFFER_INTERVAL", &analog_buf)){
-		printf("DATASET_ANALOG_BUFFER_INTERVAL %d\n", analog_buf);
-	}
-	else{
-	   printf("\n no DATASET_ANALOG_BUFFER_INTERVAL on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//DATASET_DIGITAL_BUFFER_INTERVAL
-	if(config_lookup_int(&cfg, "DATASET_DIGITAL_BUFFER_INTERVAL", &digital_buf)){
-		printf("DATASET_DIGITAL_BUFFER_INTERVAL %d\n", digital_buf);
-	}
-	else{
-	   printf("\n no DATASET_DIGITAL_BUFFER_INTERVAL on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-	//DATASET_EVENTS_BUFFER_INTERVAL
-	if(config_lookup_int(&cfg, "DATASET_EVENTS_BUFFER_INTERVAL", &events_buf)){
-		printf("DATASET_EVENTS_BUFFER_INTERVAL %d\n", events_buf);
-	}
-	else{
-	   printf("\n no DATASET_EVENTS_BUFFER_INTERVAL on the configuration file\n");
-		config_destroy(&cfg);
-		return -1;
-	}
-
-
 
 	/*****************
 	 * START CONFIGURATIONS
@@ -898,7 +845,7 @@ static int read_configuration() {
 				events[num_of_event_ids].nponto = nponto;
 				
 				state_split=0;
-				for ( i=0; i <35; i++) {
+				for ( i=0; i <MAX_STR_NAME; i++) {
 					if (state_name[i] == '/' ){
 						state_split=i;
 						events[num_of_event_ids].state_on[i]=0;
@@ -922,7 +869,7 @@ static int read_configuration() {
 				digital[num_of_digital_ids].nponto = nponto;
 				
 				state_split=0;
-				for ( i=0; i <35; i++) {
+				for ( i=0; i <MAX_STR_NAME; i++) {
 					if (state_name[i] == '/' ){
 						state_split=i;
 						digital[num_of_digital_ids].state_on[i]=0;
@@ -997,7 +944,6 @@ static int read_configuration() {
 		snprintf(dataset_conf[i].id, DATASET_NAME_SIZE, "ds_%03d", i);
 	}
 
-	config_destroy(&cfg);
 	fclose(file);
 	fclose(log_file);
 	return 0;
@@ -1024,7 +970,6 @@ static void cleanup_variables(MmsConnection con)
 	free(digital);
 	free(events);
 	MmsConnection_destroy(con);
-
 }
 
 int main (int argc, char ** argv){
