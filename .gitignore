@@ -8,6 +8,7 @@
 *.log
 *.o
 *.d
+*.bkp
 *.h.gch
 build/*
 bin/*
