@@ -659,9 +659,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 				i++;
 			}
 		//CONFIRM RECEPTION OF EVENT
-		printf("send unconfirmed\n");
 		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
-		printf("--send unconfirmed\n");
 		MmsValue_delete(value);
 		//LinkedList_destroy(attributes);
 	} else{
