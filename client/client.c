@@ -1082,7 +1082,7 @@ int main (int argc, char ** argv){
 	while(running) {
 		if (check_connection(con,IDICCP,  error_file) < 0)
 			break;
-		sleep(2);//sleep 2s
+		Thread_sleep(2000);//sleep 2s
 	}
 
 	cleanup_variables(con);

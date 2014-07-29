@@ -247,10 +247,9 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_
 int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 	static int loop_error;
 	MmsError mmsError;
-	MmsValue* loop_value;
+	MmsValue* loop_value = NULL;
 
 	loop_value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Bilateral_Table_ID");
-
 	if (loop_value == NULL){ 
 		printf("loop value == NULL \n");
 		if (mmsError == MMS_ERROR_CONNECTION_LOST){
