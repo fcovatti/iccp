@@ -1,7 +1,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <pthread.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -12,18 +11,18 @@
 #include "client.h"
 #include "util.h"
 
-/* Defines for code debugging*/
+/***************************** Defines for code debugging********************************************/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
 //#define HANDLE_EVENTS_DATA_DEBUG 1
 //#define REPORTS_ONLY_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
 #define DATA_LOG 1
+/*********************************************************************************************************/
 
+static int running = 1; //used on handler for signal interruption
 
-static int running = 1;
-
-//Configuration
+/***************************************Configuration**************************************************/
 static int num_of_analog_ids = 0;	
 static int num_of_digital_ids = 0;	
 static int num_of_event_ids = 0;	
@@ -39,6 +38,13 @@ static data_config * events = NULL;
 
 static dataset_config * dataset_conf = NULL;
 
+static char IDICCP[MAX_ID_ICCP_NAME];
+
+static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
+
+static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
+/*********************************************************************************************************/
+
 #ifdef DATA_LOG
 static FILE * data_file_analog = NULL;
 static FILE * data_file_digital = NULL;
@@ -46,50 +52,50 @@ static FILE * data_file_events = NULL;
 #endif
 
 static FILE * error_file = NULL;
-static char IDICCP[MAX_ID_ICCP_NAME];
-static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
-int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
 
-static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp);
-static int handle_digital_state(unsigned char state, int index, time_t time_stamp);
-static int handle_event_state(unsigned char state, int index, time_t time_stamp);
+/***********************************Handle functions*****************************************************/
+static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp);
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp);
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp);
 
-void handle_analog_report(float value, unsigned char state, int index,time_t time_stamp){
+/*********************************************************************************************************/
+void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
 	handle_analog_state(value,state,index,time_stamp);
 }
 
-void handle_digital_report(unsigned char state, int index,time_t time_stamp){
+void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp){
 	handle_digital_state(state, index, time_stamp);
 }
 
-void handle_event_report(unsigned char state, int index,time_t time_stamp){
+void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp){
 	handle_event_state(state, index, time_stamp);
 }
 
-void handle_analog_integrity(float value, unsigned char state, int index,time_t time_stamp){
+void handle_analog_integrity(float value, unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
 	handle_analog_state(value,state,index,time_stamp);
 #endif
 }
-void handle_digital_integrity(unsigned char state, int index,time_t time_stamp){
+void handle_digital_integrity(unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
 	handle_digital_state(state, index, time_stamp);
 #endif
 }
 
-void handle_event_integrity(unsigned char state, int index,time_t time_stamp){
+void handle_event_integrity(unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
 	handle_event_state(state, index, time_stamp);
 #endif
 }
 
-static int handle_analog_state(float value, unsigned char state, int index,time_t time_stamp){
+/*********************************************************************************************************/
 
-	if (analog != NULL && index < num_of_analog_ids) {
+static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp){
+
+	if (analog != NULL && index >=0 && index < num_of_analog_ids) {
 
 #ifdef DATA_LOG
-		if(	(analog[index].f != value) || (analog[index].state != state)){
-			//fprintf(data_file_analog, "%08d %02X %u %.2f\n", analog[index].nponto, state, (int)time_stamp, value);
+		if((analog[index].f != value) || (analog[index].state != state)){
 			data_analog_out data;
 			data.nponto = analog[index].nponto;
 			data.state = state;
@@ -109,13 +115,14 @@ static int handle_analog_state(float value, unsigned char state, int index,time_
 	return 0;
 }
 
-static int handle_digital_state(unsigned char state, int index, time_t time_stamp){
+/*********************************************************************************************************/
 
-	if (digital != NULL && index < num_of_digital_ids) {
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp){
+
+	if (digital != NULL && index >=0 && index < num_of_digital_ids) {
 
 #ifdef DATA_LOG
 		if((digital[index].state != state)){
-			//fprintf(data_file_digital, "%08d %02X %u\n", digital[index].nponto, state, (int)time_stamp);
 			data_digital_out data;
 			data.nponto = digital[index].nponto;
 			data.state = state;
@@ -133,13 +140,14 @@ static int handle_digital_state(unsigned char state, int index, time_t time_stam
 	return 0;
 }
 
-static int handle_event_state(unsigned char state, int index, time_t time_stamp){
+/*********************************************************************************************************/
 
-	if (events != NULL && index < num_of_event_ids) {
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp){
+
+	if (events != NULL && index >=0 && index < num_of_event_ids) {
 
 #ifdef DATA_LOG
 		if((events[index].state != state)){
-			//fprintf(data_file_events, "%08d %02X %u\n", events[index].nponto, state, (int)time_stamp);
 			data_digital_out data;
 			data.nponto = events[index].nponto;
 			data.state = state;
@@ -157,11 +165,12 @@ static int handle_event_state(unsigned char state, int index, time_t time_stamp)
 	return 0;
 }
 
-static int read_dataset(MmsConnection con, char * ds_name, int offset){
+/*********************************************************************************************************/
+
+static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 	MmsValue* dataSet;
 	MmsError mmsError;
 	int i, idx;
-
 	MmsValue* dataSetValue;
 	MmsValue* dataSetElem;
 	MmsValue* timeStamp;
@@ -257,7 +266,6 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				}
 				handle_digital_integrity(data_state, idx, time_stamp);
 
-
 			} else if(dataset_conf[offset].type == DATASET_EVENTS){
 				data_state = 0;
 				//First element Data_TimeStampExtended
@@ -286,28 +294,10 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 					}else {
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
-
 				}
 				handle_event_integrity(data_state, idx, time_stamp);
 		
 			} else if(dataset_conf[offset].type == DATASET_COMMANDS){
-			/*	//First element Data_TimeStampExtended
-				dataSetElem = MmsValue_getElement(dataSetValue, 0);
-				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get digital Data_TimeStampExtended %s\n", configuration[i].id);
-					return -1;
-				}
-				printf(" command MmsType %d\n",dataSetElem->type); 
-
-				//Second Element DataState
-				dataSetElem = MmsValue_getElement(dataSetValue, 1);
-				if(dataSetElem == NULL) {
-					fprintf(error_file, "ERROR - could not get command State %s\n", configuration[i].id);
-					return -1;
-				}
-
-				printf("MmsType %d\n",dataSetElem->type); 
-				*/
 				printf("command dataset\n");
 			} else{
 				fprintf(error_file, "ERROR - unknown configuration type for dataset %d offset %d\n", offset, idx);
@@ -315,7 +305,6 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 				return -1;
 			}
 			//MmsValue_delete(dataSetValue); 
-
 		}
 	}
 	//after reading dataset flush files
@@ -337,6 +326,8 @@ static int read_dataset(MmsConnection con, char * ds_name, int offset){
 	return 0;
 }
 
+/*********************************************************************************************************/
+
 static void create_dataset(MmsConnection con, char * ds_name, int offset)
 {
 	MmsError mmsError;
@@ -345,7 +336,6 @@ static void create_dataset(MmsConnection con, char * ds_name, int offset)
 	int last = 0;
 	LinkedList variables = LinkedList_create();
 
-	//printf("create_data_Set %d\n", offset);
 	MmsVariableAccessSpecification * var; 
 	MmsVariableAccessSpecification * name = MmsVariableAccessSpecification_create (IDICCP, "Transfer_Set_Name");
 	MmsVariableAccessSpecification * ts   = MmsVariableAccessSpecification_create (IDICCP, "Transfer_Set_Time_Stamp");
@@ -404,6 +394,8 @@ static void create_dataset(MmsConnection con, char * ds_name, int offset)
 	LinkedList_destroy(variables);
 }
 
+/*********************************************************************************************************/
+
 static void
 informationReportHandler (void* parameter, char* domainName, char* variableListName, MmsValue* value, LinkedList attributes, int attributesCount)
 {
@@ -415,7 +407,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	MmsError mmsError;
 	int octet_offset = 0;
 	time(&time_stamp);
-	//printf("*************Information Report Received %d********************\n", attributesCount);
 	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
 		LinkedList list_names	 = LinkedList_getNext(attributes);
 		while (list_names != NULL) {
@@ -468,7 +459,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 				continue;
 			}
 
-
 			for (offset=0; offset<num_of_datasets;offset++) {
 
 				if (strncmp(attribute_name,dataset_conf[offset].id,24) == 0) {
@@ -478,13 +468,12 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 						if (dataSetValue->value.octetString.buf != NULL) {
 							unsigned int index = 0;	
 							
-							//DEBUG
+							//DEBUG BUFFER
 							  /* int j;
 							   for (j=0; j < dataSetValue->value.octetString.size; j ++){
 							   printf(" %x", dataSetValue->value.octetString.buf[j]);
 							   }
 							   printf("\n"); */
-						
 
 							//RULE 0
 							//first byte is the rule
@@ -551,9 +540,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									}
 									index++;
 								}
-
-
-								//TODO: implement rule 0 handling
 							}else if(dataSetValue->value.octetString.buf[0] == 1) {
 								//RULE 1 - not implemented
 								printf("Error - Information Report with rule 1 received\n");
@@ -571,7 +557,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									// Packet INDEX
-									index = dataSetValue->value.octetString.buf[octet_offset]<<8 | (dataSetValue->value.octetString.buf[octet_offset+1]-INDEX_OFFSET);
+									index = (dataSetValue->value.octetString.buf[octet_offset]<<8 | dataSetValue->value.octetString.buf[octet_offset+1])-INDEX_OFFSET;
 									// Translate into configuration index
 									index = index + dataset_conf[offset].offset; // config index
 									
@@ -654,10 +640,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 						fflush(error_file);
 					}
 				}
-				}
-
-				i++;
 			}
+			i++;
+		}
 		//CONFIRM RECEPTION OF EVENT
 		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
 		MmsValue_delete(value);
@@ -668,6 +653,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	}
 	//TODO: free values
 }
+
+/*********************************************************************************************************/
 
 static int read_configuration() {
 	FILE * file = NULL;
@@ -686,7 +673,6 @@ static int read_configuration() {
 	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME], cfg_log[MAX_STR_NAME], error_log[MAX_STR_NAME];
 	char config_param[MAX_STR_NAME], config_value[MAX_STR_NAME];
 	int cfg_params = 0;
-
 
 	/*****************
 	 * READ ICCP CONFIGURATION PARAMETERS
@@ -771,7 +757,6 @@ static int read_configuration() {
 				printf("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
 				cfg_params++;
 			}
-				
 		}
 	}
 	if (cfg_params !=14){
@@ -791,11 +776,9 @@ static int read_configuration() {
 		return -1;
 	}
 
-
     analog = calloc(DATASET_MAX_SIZE*DATASET_ANALOG_MAX_NUMBER, sizeof(data_config) ); 
     digital = calloc(DATASET_MAX_SIZE*DATASET_DIGITAL_MAX_NUMBER, sizeof(data_config) ); 
     events  = calloc(DATASET_MAX_SIZE*DATASET_EVENTS_MAX_NUMBER, sizeof(data_config) ); 
-
 
 	file = fopen(cfg_file, "r");
 	if(file==NULL){
@@ -859,7 +842,6 @@ static int read_configuration() {
 					}else
 						events[num_of_event_ids].state_on[i]=state_name[i];
 				}
-
 				num_of_event_ids++;
 			} //Digital
 			else if(type == 'D'){
@@ -882,8 +864,6 @@ static int read_configuration() {
 					}else
 						digital[num_of_digital_ids].state_on[i]=state_name[i];
 				}
-
-
 				num_of_digital_ids++;
 			} //Analog
 			else if(type == 'A'){
@@ -895,7 +875,6 @@ static int read_configuration() {
 			else {
 				printf("ERROR reading configuration file! Unknown type");
 			}
-
 		}
 	}
 
@@ -947,11 +926,14 @@ static int read_configuration() {
 	return 0;
 }
 
+/*********************************************************************************************************/
+
 static void sigint_handler(int signalId)
 {
 	running = 0;
 }
 
+/*********************************************************************************************************/
 
 static void cleanup_variables(MmsConnection con)
 {
@@ -970,8 +952,56 @@ static void cleanup_variables(MmsConnection con)
 	MmsConnection_destroy(con);
 }
 
+/*********************************************************************************************************/
+
+#ifdef DATA_LOG
+static int open_data_logs(void) {
+	data_file_analog = fopen(DATA_ANALOG_LOG, "w");
+	if(data_file_analog==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_ANALOG_LOG);
+		return -1;
+	}
+	data_file_digital = fopen(DATA_DIGITAL_LOG, "w");
+	if(data_file_digital==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_DIGITAL_LOG);
+		return -1;
+	}
+	data_file_events = fopen(DATA_EVENTS_LOG, "w");
+	if(data_file_events==NULL){
+		printf("Error, cannot open configuration data log file %s\n", DATA_EVENTS_LOG);
+		return -1;
+	}
+	return 0;
+
+}
+#endif
+
+/*********************************************************************************************************/
+
+//(TODO: add connection handler)
+static int connect_to_srvs(MmsConnection * con){
+	if ((connect_to_server(*con, srv1) < 0)){
+		MmsConnection_destroy(*con);
+		*con = MmsConnection_create();
+		if ((connect_to_server(*con, srv2) < 0)){
+			MmsConnection_destroy(*con);
+			*con = MmsConnection_create();
+			if ((connect_to_server(*con, srv3) < 0)){
+				MmsConnection_destroy(*con);
+				*con = MmsConnection_create();
+				if ((connect_to_server(*con, srv4) < 0)){
+					return -1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+/*********************************************************************************************************/
+
 int main (int argc, char ** argv){
-	int i = 0;
+	unsigned int i = 0;
 	MmsError mmsError;
 	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
@@ -984,44 +1014,20 @@ int main (int argc, char ** argv){
 		printf("Start configuration with %d analog, %d digital, %d events and %d datasets\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_datasets);
 	}
 
-	// OPEN DATA LOG	
+	// OPEN DATA LOG FILES	
 #ifdef DATA_LOG
-	data_file_analog = fopen(DATA_ANALOG_LOG, "w");
-	if(data_file_analog==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_ANALOG_LOG);
-		cleanup_variables(con);
-		return -1;
-	}
-	data_file_digital = fopen(DATA_DIGITAL_LOG, "w");
-	if(data_file_digital==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_DIGITAL_LOG);
-		cleanup_variables(con);
-		return -1;
-	}
-	data_file_events = fopen(DATA_EVENTS_LOG, "w");
-	if(data_file_events==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_EVENTS_LOG);
+	if(open_data_logs()<0) {
+		printf("Error, cannot open configuration data log files\n");
 		cleanup_variables(con);
 		return -1;
 	}
 #endif
 
-	//INITIALIZE CONNECTION (TODO: add connection handler)
-	if ((connect_to_server(con, srv1) < 0)){
-		MmsConnection_destroy(con);
-		con = MmsConnection_create();
-		if ((connect_to_server(con, srv2) < 0)){
-			MmsConnection_destroy(con);
-			con = MmsConnection_create();
-			if ((connect_to_server(con, srv3) < 0)){
-				MmsConnection_destroy(con);
-				con = MmsConnection_create();
-				if ((connect_to_server(con, srv4) < 0)){
-					cleanup_variables(con);
-					return -1;
-				}
-			}
-		}
+	//INITIALIZE CONNECTION 
+	if(connect_to_srvs(&con) < 0){
+		printf("Error, cannot connect to any server\n");
+		cleanup_variables(con);
+		return -1;
 	}
 
 	// DELETE DATASETS WHICH WILL BE USED
@@ -1040,7 +1046,6 @@ int main (int argc, char ** argv){
 			return -1;
 		} else {
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
-			//printf("New transfer set %s\n",dataset_conf[i].ts);
 			MmsValue_delete(transfer_set_dig);
 		}
 	}	
@@ -1065,8 +1070,8 @@ int main (int argc, char ** argv){
 			cleanup_variables(con);
 			return -1;
 		}
-
 	}
+	
 	// READ VARIABLES
 	printf("*************Reading DS Values********************\n");
 	for (i=0; i < num_of_datasets; i++){
