@@ -3,6 +3,7 @@ LIBIEC_HOME=../../libiec61850-iccp-0.7.7
 PROJECT_BINARY_NAME = iccp_client
 PROJECT_SOURCES = client.c
 PROJECT_SOURCES += util.c
+PROJECT_SOURCES += comm.c
 
 include $(LIBIEC_HOME)/make/target_system.mk
 include $(LIBIEC_HOME)/make/stack_includes.mk

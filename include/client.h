@@ -12,7 +12,7 @@
 #include "mms_client_connection.h"
 #include "client.h"
 
-#define ICCP_CLIENT_CONFIG_FILE "iccp_client_config.txt"
+#define ICCP_CLIENT_CONFIG_FILE "iccp_config.txt"
 
 // OFFSET for the index in received reports
 #define INDEX_OFFSET 3

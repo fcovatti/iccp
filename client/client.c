@@ -9,7 +9,9 @@
 #include "mms_client_connection.h"
 #include "mms_value_internal.h"
 #include "client.h"
+#include "comm.h"
 #include "util.h"
+#include "socket.h"
 
 /***************************** Defines for code debugging********************************************/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
@@ -41,8 +43,12 @@ static dataset_config * dataset_conf = NULL;
 static char IDICCP[MAX_ID_ICCP_NAME];
 
 static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
-
 static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
+
+static char ihm_addr[MAX_STR_NAME];
+static int ihm_socket=0;
+static int ihm_enabled=0;
+static struct sockaddr_in ihm_sock_addr;
 /*********************************************************************************************************/
 
 #ifdef DATA_LOG
@@ -54,43 +60,43 @@ static FILE * data_file_events = NULL;
 static FILE * error_file = NULL;
 
 /***********************************Handle functions*****************************************************/
-static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp);
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp);
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp);
+static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp, char report);
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, char report);
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, char report);
 
 /*********************************************************************************************************/
 void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
-	handle_analog_state(value,state,index,time_stamp);
+	handle_analog_state(value,state,index,time_stamp,1);
 }
 
 void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp){
-	handle_digital_state(state, index, time_stamp);
+	handle_digital_state(state, index, time_stamp,1);
 }
 
 void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp){
-	handle_event_state(state, index, time_stamp);
+	handle_event_state(state, index, time_stamp,1);
 }
 
 void handle_analog_integrity(float value, unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_analog_state(value,state,index,time_stamp);
+	handle_analog_state(value,state,index,time_stamp,0);
 #endif
 }
 void handle_digital_integrity(unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_digital_state(state, index, time_stamp);
+	handle_digital_state(state, index, time_stamp,0);
 #endif
 }
 
 void handle_event_integrity(unsigned char state, unsigned int index,time_t time_stamp){
 #ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_event_state(state, index, time_stamp);
+	handle_event_state(state, index, time_stamp,0);
 #endif
 }
 
 /*********************************************************************************************************/
 
-static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp){
+static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp,char report){
 
 	if (analog != NULL && index >=0 && index < num_of_analog_ids) {
 
@@ -111,13 +117,15 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp, "", "");
 #endif
+		if(ihm_enabled && ihm_socket > 0){
+			send_analog_to_ihm(ihm_socket, &ihm_sock_addr, analog[index].nponto, value, state, report);
+		}
 	}
 	return 0;
 }
-
 /*********************************************************************************************************/
 
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp){
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp,char report){
 
 	if (digital != NULL && index >=0 && index < num_of_digital_ids) {
 
@@ -127,6 +135,10 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 			data.nponto = digital[index].nponto;
 			data.state = state;
 			data.time_stamp = time_stamp;
+			
+			printf("%25s: ", digital[index].id);
+			print_value(state,0, time_stamp,digital[index].state_on, digital[index].state_off);
+
 			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
 #endif
@@ -136,13 +148,16 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		printf("%25s: ", digital[index].id);
 		print_value(state,0, time_stamp,digital[index].state_on, digital[index].state_off);
 #endif
+		if(ihm_enabled && ihm_socket > 0){
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, state, time_stamp, report);
+		}
 	}
 	return 0;
 }
 
 /*********************************************************************************************************/
 
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp){
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, char report){
 
 	if (events != NULL && index >=0 && index < num_of_event_ids) {
 
@@ -161,6 +176,9 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		printf("%25s: ", events[index].id);
 		print_value(state,0, time_stamp,events[index].state_on, events[index].state_off);
 #endif
+		if(ihm_enabled && ihm_socket > 0){
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, state, time_stamp, report);
+		}
 	}
 	return 0;
 }
@@ -713,6 +731,11 @@ static int read_configuration() {
 				printf("SERVER_NAME_4=%s\n", srv4);
 				cfg_params++;
 			}
+			if(strcmp(config_param, "IHM_ADDRESS") == 0){
+				snprintf(ihm_addr, MAX_STR_NAME, "%s", config_value);
+				printf("IHM_ADDRESS=%s\n", ihm_addr);
+				cfg_params++;
+			}
 			if(strcmp(config_param, "CONFIG_FILE") == 0){
 				snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
 				printf("CONFIG_FILE=%s\n", cfg_file);
@@ -759,7 +782,7 @@ static int read_configuration() {
 			}
 		}
 	}
-	if (cfg_params !=14){
+	if (cfg_params !=15){
 		printf("wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		return -1;
 	}
@@ -950,6 +973,8 @@ static void cleanup_variables(MmsConnection con)
 	free(digital);
 	free(events);
 	MmsConnection_destroy(con);
+	if(ihm_enabled)
+		close(ihm_socket);
 }
 
 /*********************************************************************************************************/
@@ -979,7 +1004,7 @@ static int open_data_logs(void) {
 /*********************************************************************************************************/
 
 //(TODO: add connection handler)
-static int connect_to_srvs(MmsConnection * con){
+static int connect_to_iccp_server(MmsConnection * con){
 	if ((connect_to_server(*con, srv1) < 0)){
 		MmsConnection_destroy(*con);
 		*con = MmsConnection_create();
@@ -997,6 +1022,21 @@ static int connect_to_srvs(MmsConnection * con){
 	}
 	return 0;
 }
+
+/*********************************************************************************************************/
+
+static int create_ihm_comm(){
+	ihm_socket = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
+	if(ihm_socket < 0){
+		printf("could not create UDP socket to trasmit to IHM\n");
+		return -1;
+	}	
+	printf("Created UDP socket for IHM %s Port %d\n",ihm_addr, PORT_IHM_TRANSMIT);
+	return 0;
+}
+
+/*********************************************************************************************************/
+
 
 /*********************************************************************************************************/
 
@@ -1023,12 +1063,31 @@ int main (int argc, char ** argv){
 	}
 #endif
 
-	//INITIALIZE CONNECTION 
-	if(connect_to_srvs(&con) < 0){
-		printf("Error, cannot connect to any server\n");
+	//INITIALIZE IHM CONNECTION 
+	if(strcmp(ihm_addr,"no")==0) {
+		printf("no ihm configured\n");
+	}else{
+		ihm_enabled=1;
+		if(create_ihm_comm() < 0){
+			printf("Error, cannot open communication to ihm server\n");
+			cleanup_variables(con);
+			return -1;
+		}
+	}
+	/*while(running){
+		SendT(ihm_socket,(char *)srv1, 10, &ihm_sock_addr);
+		Thread_sleep(2000);
+	}
+	cleanup_variables(con);
+	return -1;
+*/
+	//INITIALIZE ICCP CONNECTION 
+	if(connect_to_iccp_server(&con) < 0){
+		printf("Error, cannot connect to iccp server\n");
 		cleanup_variables(con);
 		return -1;
 	}
+
 
 	// DELETE DATASETS WHICH WILL BE USED
 	printf("deleting dada sets\n");
