@@ -230,7 +230,6 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		digital_value.dia=time_result->tm_mday;
 		digital_value.mes=time_result->tm_mon;
 		digital_value.ano=time_result->tm_year;
-		printf("%d - %d %d %d %d %d %d \n",nponto,digital_value.ano, digital_value.mes,digital_value.dia,digital_value.hora,digital_value.min,digital_value.ms);
 		memcpy(msg_sup.info,(char *) &digital_value, sizeof(digital_w_time7_seq));
 	}
 	else {
@@ -242,7 +241,6 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
 	}
 
-	printf("sent %s %d - iccp 0x%x ihm 0x%x\n", report?"report":"gi", msg_sup.endereco, state, digital_state);
 	SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }
 /*********************************************************************************************************/

@@ -135,10 +135,6 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 			data.nponto = digital[index].nponto;
 			data.state = state;
 			data.time_stamp = time_stamp;
-			
-			printf("%25s: ", digital[index].id);
-			print_value(state,0, time_stamp,digital[index].state_on, digital[index].state_off);
-
 			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
 #endif
