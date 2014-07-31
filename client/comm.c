@@ -212,11 +212,11 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 	if((state&0x08) && !(state&0x04))
 		digital_state=digital_state|0x20; //manual
 
-	if(state&0x01 && report) 
+	if(state&0x01 && report){ 
 		digital_state=digital_state|0x08; //invalid timestamp
+	}
 
-
-	if(report){
+	if(report ){
 		struct tm * time_result;
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
@@ -228,8 +228,9 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		digital_value.min=time_result->tm_min;
 		digital_value.hora=time_result->tm_hour;
 		digital_value.dia=time_result->tm_mday;
-		digital_value.mes=time_result->tm_mon;
-		digital_value.ano=time_result->tm_year;
+		digital_value.mes=time_result->tm_mon+1;
+		digital_value.ano=time_result->tm_year-100;
+		//printf("nponto %d day %d, mon %d, yer %d, hora %d, min %d, ms %d\n", msg_sup.endereco, digital_value.dia,digital_value.mes, digital_value.ano, digital_value.hora, digital_value.min, digital_value.ms);
 		memcpy(msg_sup.info,(char *) &digital_value, sizeof(digital_w_time7_seq));
 	}
 	else {
