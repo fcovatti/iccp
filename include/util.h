@@ -117,7 +117,7 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *    error_file);
 
 int connect_to_server(MmsConnection con, char * server);
 
-static inline void print_value (char state, bool ana, time_t time_stamp, char * state_on, char * state_off) {
+static inline void print_value (char state, bool ana, time_t time_stamp, unsigned short time_stamp_extended, char * state_on, char * state_off) {
 	struct tm * time_result;
 	MmsValue * value = MmsValue_newBitString(8);
 	memcpy(value->value.bitString.buf, &state, 1);
@@ -176,7 +176,10 @@ static inline void print_value (char state, bool ana, time_t time_stamp, char * 
 	}
 
 	time_result = localtime(&time_stamp);
-	printf("%s ", asctime(time_result));
+	if(!ana)
+		printf("%d:%s ", time_stamp_extended, asctime(time_result));
+	else
+		printf("%s ", asctime(time_result));
 
 }
 

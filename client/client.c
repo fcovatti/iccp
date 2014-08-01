@@ -61,20 +61,20 @@ static FILE * error_file = NULL;
 
 /***********************************Handle functions*****************************************************/
 static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp, char report);
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, char report);
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, char report);
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
 /*********************************************************************************************************/
 void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
 	handle_analog_state(value,state,index,time_stamp,1);
 }
 
-void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp){
-	handle_digital_state(state, index, time_stamp,1);
+void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
+	handle_digital_state(state, index, time_stamp,time_stamp_extended,1);
 }
 
-void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp){
-	handle_event_state(state, index, time_stamp,1);
+void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
+	handle_event_state(state, index, time_stamp,time_stamp_extended,1);
 }
 
 void handle_analog_integrity(float value, unsigned char state, unsigned int index,time_t time_stamp){
@@ -82,15 +82,15 @@ void handle_analog_integrity(float value, unsigned char state, unsigned int inde
 	handle_analog_state(value,state,index,time_stamp,0);
 #endif
 }
-void handle_digital_integrity(unsigned char state, unsigned int index,time_t time_stamp){
+void handle_digital_integrity(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
 #ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_digital_state(state, index, time_stamp,0);
+	handle_digital_state(state, index, time_stamp,time_stamp_extended,0);
 #endif
 }
 
-void handle_event_integrity(unsigned char state, unsigned int index,time_t time_stamp){
+void handle_event_integrity(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
 #ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_event_state(state, index, time_stamp,0);
+	handle_event_state(state, index, time_stamp,time_stamp_extended,0);
 #endif
 }
 
@@ -115,7 +115,7 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		analog[index].time_stamp = time_stamp;
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
-		print_value(state,1, time_stamp, "", "");
+		print_value(state,1, time_stamp,0, "", "");
 #endif
 		if(ihm_enabled && ihm_socket > 0){
 			send_analog_to_ihm(ihm_socket, &ihm_sock_addr, analog[index].nponto, value, state, report);
@@ -125,7 +125,7 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 }
 /*********************************************************************************************************/
 
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp,char report){
+static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended,char report){
 
 	if (digital != NULL && index >=0 && index < num_of_digital_ids) {
 
@@ -135,17 +135,20 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 			data.nponto = digital[index].nponto;
 			data.state = state;
 			data.time_stamp = time_stamp;
+			data.time_stamp_extended = time_stamp_extended;
 			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
 #endif
 		digital[index].state = state;
 		digital[index].time_stamp = time_stamp;
+		digital[index].time_stamp_extended = time_stamp_extended;
+
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
 		printf("%25s: ", digital[index].id);
-		print_value(state,0, time_stamp,digital[index].state_on, digital[index].state_off);
+		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, state, time_stamp, report);
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, state, time_stamp, time_stamp_extended, report);
 		}
 	}
 	return 0;
@@ -153,7 +156,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 
 /*********************************************************************************************************/
 
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, char report){
+static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report){
 
 	if (events != NULL && index >=0 && index < num_of_event_ids) {
 
@@ -163,17 +166,20 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 			data.nponto = events[index].nponto;
 			data.state = state;
 			data.time_stamp = time_stamp;
+			data.time_stamp_extended = time_stamp_extended;
 			fwrite(&data,1,sizeof(data_digital_out),data_file_events);
 		}
 #endif
 		events[index].state = state;
 		events[index].time_stamp = time_stamp;
+		events[index].time_stamp_extended = time_stamp_extended;
+
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
 		printf("%25s: ", events[index].id);
-		print_value(state,0, time_stamp,events[index].state_on, events[index].state_off);
+		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, state, time_stamp, report);
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, state, time_stamp, time_stamp_extended,report);
 		}
 	}
 	return 0;
@@ -195,6 +201,9 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 #endif
 	int number_of_variables = dataset_conf[offset].size; 
 	unsigned char data_state =0;
+	unsigned short time_stamp_extended =0;
+	unsigned char * ts_extended;
+	ts_extended = (char *) &time_stamp_extended;
 
 	dataSet = MmsConnection_readNamedVariableListValues(con, &mmsError, IDICCP, ds_name, 0);
 	if (dataSet == NULL){
@@ -257,8 +266,12 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					fprintf(error_file, "ERROR - could not get digital Data_TimeStampExtended %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
 					fflush(error_file);
 					time(&time_stamp); //use system time stamp
+					time_stamp_extended=0;
 					//TODO if non existent object return -1;
 				}else{
+					//printf("nponto %d extended %x %x \n", digital[idx].nponto, dataSetElem->value.octetString.buf[0], dataSetElem->value.octetString.buf[1]);	
+					ts_extended[1]= dataSetElem->value.octetString.buf[0];
+					ts_extended[0]= dataSetElem->value.octetString.buf[1];
 					timeStamp = MmsValue_getElement(dataSetElem, 0);
 					if(timeStamp == NULL) {
 						fprintf(error_file, "ERROR - could not get digital timestamp value %s - nponto %d\n", digital[idx].id, digital[idx].nponto);
@@ -278,8 +291,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
 				}
-				handle_digital_integrity(data_state, idx, time_stamp);
-
+				handle_digital_integrity(data_state, idx, time_stamp, time_stamp_extended); 
 			} else if(dataset_conf[offset].type == DATASET_EVENTS){
 				data_state = 0;
 				//First element Data_TimeStampExtended
@@ -288,8 +300,12 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					fprintf(error_file, "ERROR - could not get event Data_TimeStampExtended %s - nponto %d\n", events[idx].id, events[idx].nponto);
 					fflush(error_file);
 					time(&time_stamp); //use system time stamp
+					time_stamp_extended=0;
 					//TODO if non existent object return -1;
 				}else{
+					ts_extended[1]= dataSetElem->value.octetString.buf[0];
+					ts_extended[0]= dataSetElem->value.octetString.buf[1];
+					
 					timeStamp = MmsValue_getElement(dataSetElem, 0);
 
 					if(timeStamp == NULL) {
@@ -309,8 +325,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
 				}
-				handle_event_integrity(data_state, idx, time_stamp);
-		
+				handle_event_integrity(data_state, idx, time_stamp,time_stamp_extended); 		
 			} else if(dataset_conf[offset].type == DATASET_COMMANDS){
 				printf("command dataset\n");
 			} else{
@@ -420,6 +435,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	char * transfer_set = NULL;
 	MmsError mmsError;
 	int octet_offset = 0;
+	unsigned short time_stamp_extended =0;
+	unsigned char * ts_extended;
+	ts_extended = (char *)&time_stamp_extended;
 	time(&time_stamp);
 	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
 		LinkedList list_names	 = LinkedList_getNext(attributes);
@@ -513,7 +531,10 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-											handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
+											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
+											
+											handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
 										} else {
 											fprintf(error_file, "ERROR - wrong digital report octet size %d, offset %d - data %d bytes - ds %d, idx %d \n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index );
 											fflush(error_file);
@@ -526,7 +547,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-											handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t);
+											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
+											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
+											handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
 										} else {
 											fprintf(error_file, "ERROR - wrong event report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index);
 											fflush(error_file);
@@ -582,7 +605,10 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
 											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
 											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-											handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+6];
+											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+7];
+											//printf("%x %x\n", dataSetValue->value.octetString.buf[6],dataSetValue->value.octetString.buf[7]); //TODO Timestamp
+											handle_digital_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t, time_stamp_extended);
 										}else {
 											fprintf(error_file,"ERROR - Wrong size of digital report %d, octet_offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE2_DIGITAL_REPORT_SIZE, offset, index );
 											fflush(error_file);
@@ -596,7 +622,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+3];
 											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+4];
 											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+5];
-											handle_event_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t);
+											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+6];
+											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+7];
+											handle_event_report(dataSetValue->value.octetString.buf[octet_offset+RULE2_DIGITAL_REPORT_SIZE-1], index, time_value.t, time_stamp_extended);
 										}else{
 											fprintf(error_file,"ERROR - Wrong size of event report %d, octet_offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE2_DIGITAL_REPORT_SIZE, offset, index  );
 											fflush(error_file);

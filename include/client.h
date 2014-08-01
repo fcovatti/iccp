@@ -71,6 +71,7 @@ typedef struct {
 	float f;
 	unsigned char state;
 	time_t time_stamp;
+	unsigned short time_stamp_extended;
 } data_config;
 
 typedef enum{
@@ -99,6 +100,7 @@ typedef struct {
 	unsigned int nponto;
 	unsigned char state;
 	time_t time_stamp;
+	unsigned short time_stamp_extended;
 } __attribute__((packed)) data_digital_out;
 
 typedef union {

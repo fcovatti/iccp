@@ -73,7 +73,7 @@ int main (int argc, char ** argv){
 			fread(&analog,1,sizeof(data_analog_out), file);
 			printf("%7d |",analog.nponto);
 			printf("%10.2f |",analog.f);
-			print_value(analog.state, 1 , analog.time_stamp, "","");
+			print_value(analog.state, 1 , analog.time_stamp, 0, "","");
 		}
 		fclose(file);
 	}
@@ -87,7 +87,7 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			printf("%7d |",digital.nponto);
-			print_value(digital.state, 0 , digital.time_stamp, "","");
+			print_value(digital.state, 0 , digital.time_stamp, digital.time_stamp_extended, "","");
 		}
 		fclose(file);
 	}
@@ -101,7 +101,7 @@ int main (int argc, char ** argv){
 		while (!feof(file) && running) {
 			fread(&digital,1,sizeof(data_digital_out), file);
 			printf("%7d |",digital.nponto);
-			print_value(digital.state, 0 , digital.time_stamp, "","");
+			print_value(digital.state, 0 , digital.time_stamp, digital.time_stamp_extended, "","");
 		}
 		fclose(file);
 	}
@@ -170,7 +170,7 @@ int main (int argc, char ** argv){
 			if(nponto == analog.nponto) {
 				printf(" %7d - %25s |", analog.nponto, id_ponto);
 				printf("%11.2f %-6s |",analog.f, state_on);
-				print_value(analog.state, 1 , analog.time_stamp, "","");
+				print_value(analog.state, 1 , analog.time_stamp,0, "","");
 			}
 		}
 		fclose(file);
@@ -183,7 +183,7 @@ int main (int argc, char ** argv){
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
 				printf(" %7d - %25s |", digital.nponto, id_ponto);
-				print_value(digital.state, 0 , digital.time_stamp, state_on, state_off);
+				print_value(digital.state, 0 , digital.time_stamp, digital.time_stamp_extended, state_on, state_off);
 			}
 		}
 		fclose(file);
@@ -196,7 +196,7 @@ int main (int argc, char ** argv){
 			fread(&digital,1,sizeof(data_digital_out), file);
 			if(nponto == digital.nponto) {
 				printf(" %7d - %25s |", digital.nponto, id_ponto);
-				print_value(digital.state, 0 , digital.time_stamp, state_on, state_off);
+				print_value(digital.state, 0 , digital.time_stamp, digital.time_stamp_extended, state_on, state_off);
 			}
 		}
 		fclose(file);

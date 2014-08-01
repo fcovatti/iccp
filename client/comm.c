@@ -187,7 +187,7 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }	
 /*********************************************************************************************************/
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char state, time_t time_stamp,char report){
+void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
@@ -216,7 +216,7 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		digital_state=digital_state|0x08; //invalid timestamp
 	}
 
-	if(report ){
+	if(report){
 		struct tm * time_result;
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
@@ -224,7 +224,9 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		msg_sup.taminfo=sizeof(digital_w_time7_seq);
 		digital_value.iq = digital_state;
 		time_result = (struct tm *)localtime(&time_stamp);
-		digital_value.ms=time_result->tm_sec*10;
+		//digital_value.ms[1]=(time_result->tm_sec*10)&0xFF;
+		//digital_value.ms[0]=((time_result->tm_sec*10)>>8)&0xFF;
+		digital_value.ms=(time_result->tm_sec*1000)+time_stamp_extended;
 		digital_value.min=time_result->tm_min;
 		digital_value.hora=time_result->tm_hour;
 		digital_value.dia=time_result->tm_mday;
