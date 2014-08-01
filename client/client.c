@@ -48,6 +48,7 @@ static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, 
 static char ihm_addr[MAX_STR_NAME];
 static int ihm_socket=0;
 static int ihm_enabled=0;
+static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
 /*********************************************************************************************************/
 
@@ -118,7 +119,7 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 		if(ihm_enabled && ihm_socket > 0){
-			send_analog_to_ihm(ihm_socket, &ihm_sock_addr, analog[index].nponto, value, state, report);
+			send_analog_to_ihm(ihm_socket, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report);
 		}
 	}
 	return 0;
@@ -148,7 +149,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, state, time_stamp, time_stamp_extended, report);
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report);
 		}
 	}
 	return 0;
@@ -179,7 +180,7 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, state, time_stamp, time_stamp_extended,report);
+			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report);
 		}
 	}
 	return 0;
@@ -710,6 +711,7 @@ static int read_configuration() {
 	int state_split = 0;
 	int state_data=0;
 	char type = 0;
+	char utr_addr=0;
 	int i;
 	const char *str1;
 	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME], cfg_log[MAX_STR_NAME], error_log[MAX_STR_NAME];
@@ -833,14 +835,26 @@ static int read_configuration() {
 		return -1;
 	} else{
 		//first two rows of CONFIG_FILE are the reader, discard them
-		if(!fgets(line, 300, file) || !fgets(line, 300, file)){
+		if(!fgets(line, 300, file)){
 			printf("Error reading %s file header\n", cfg_file);
+			return -1;
+		}else {
+			if(sscanf(line, "%*s %*d %*s %d", &ihm_station) <1){
+				printf("cannot get ihm station from header\n");
+				return -1;
+			}else {
+				printf("IHM station %d\n", ihm_station);
+			}
+		}
+
+		if(!fgets(line, 300, file)){
+			printf("Error reading %s file header second line\n", cfg_file);
 			return -1;
 		}
 
 		while ( fgets(line, 300, file)){
 			//if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
-			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %*d %*d %*f %*f %*d %d", &nponto,  id_ponto, &type, state_name, &origin, &event ) <1)
+			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %d %*d %*f %*f %*d %d", &nponto,  id_ponto, &type, state_name, &origin, &utr_addr, &event ) <1)
 				break;
 
 			//change - for $
@@ -871,6 +885,7 @@ static int read_configuration() {
 			else if(type == 'D' && event == 3){
 				memcpy(events[num_of_event_ids].id,id_ponto,25);
 				events[num_of_event_ids].nponto = nponto;
+				events[num_of_event_ids].utr_addr = utr_addr;
 				
 				state_split=0;
 				for ( i=0; i <MAX_STR_NAME; i++) {
@@ -894,6 +909,7 @@ static int read_configuration() {
 			else if(type == 'D'){
 				memcpy(digital[num_of_digital_ids].id,id_ponto,25);
 				digital[num_of_digital_ids].nponto = nponto;
+				digital[num_of_digital_ids].utr_addr = utr_addr;
 				
 				state_split=0;
 				for ( i=0; i <MAX_STR_NAME; i++) {
@@ -916,6 +932,7 @@ static int read_configuration() {
 			else if(type == 'A'){
 				memcpy(analog[num_of_analog_ids].id,id_ponto,25);
 				analog[num_of_analog_ids].nponto = nponto;
+				analog[num_of_analog_ids].utr_addr = utr_addr;
 				memcpy(analog[num_of_analog_ids].state_on,state_name,  16);
 				num_of_analog_ids++;
 			} //Unknown 

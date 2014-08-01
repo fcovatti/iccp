@@ -72,6 +72,7 @@ typedef struct {
 	unsigned char state;
 	time_t time_stamp;
 	unsigned short time_stamp_extended;
+	unsigned char utr_addr;
 } data_config;
 
 typedef enum{

@@ -156,14 +156,15 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 
 
 /*********************************************************************************************************/
-void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,float value, unsigned char state, char report){
+void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report){
  
 			t_msgsup msg_sup;
 			flutuante_seq float_value;
 			memset(&msg_sup, 0, sizeof(t_msgsup));
 			msg_sup.signature = 0x53535353;
 			msg_sup.endereco = nponto;
-			msg_sup.tipo=13;
+			msg_sup.prim = ihm_station;
+			msg_sup.sec = utr_addr;
 
 			if(report)
 				msg_sup.causa=3; //report
@@ -187,13 +188,15 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }	
 /*********************************************************************************************************/
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
 	memset(&msg_sup, 0, sizeof(t_msgsup));
 	msg_sup.signature = 0x53535353;
 	msg_sup.endereco = nponto;
+	msg_sup.prim = ihm_station;
+	msg_sup.sec = utr_addr;
 	
 	if(!(state&0x40) && (state&0x80)) 
 		digital_state=0x01;//off

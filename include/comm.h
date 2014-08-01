@@ -81,7 +81,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr);
 
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr);
 
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
+void send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
-void send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,float value, unsigned char state, char report);
+void send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report);
 #endif
