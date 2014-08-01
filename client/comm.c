@@ -165,6 +165,7 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			msg_sup.endereco = nponto;
 			msg_sup.prim = ihm_station;
 			msg_sup.sec = utr_addr;
+			msg_sup.tipo = 13;
 
 			if(report)
 				msg_sup.causa=3; //report
