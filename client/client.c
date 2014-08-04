@@ -711,7 +711,7 @@ static int read_configuration() {
 	int state_split = 0;
 	int state_data=0;
 	char type = 0;
-	char utr_addr=0;
+	int utr_addr=0;
 	int i;
 	const char *str1;
 	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME], cfg_log[MAX_STR_NAME], error_log[MAX_STR_NAME];
