@@ -11,6 +11,7 @@
 #include "client.h"
 #include "comm.h"
 #include "util.h"
+#include "control.h"
 #include "socket.h"
 
 /***************************** Defines for code debugging********************************************/
@@ -43,6 +44,7 @@ static dataset_config * dataset_conf = NULL;
 static char IDICCP[MAX_ID_ICCP_NAME];
 
 static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
+static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
 static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
 
 static char ihm_addr[MAX_STR_NAME];
@@ -114,6 +116,7 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		analog[index].f = value;
 		analog[index].state = state;
 		analog[index].time_stamp = time_stamp;
+
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
@@ -757,6 +760,27 @@ static int read_configuration() {
 				printf("SERVER_NAME_4=%s\n", srv4);
 				cfg_params++;
 			}
+			if(strcmp(config_param, "SERVER_NAME_5") == 0){
+				snprintf(srv5, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_5=%s\n", srv5);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_6") == 0){
+				snprintf(srv6, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_6=%s\n", srv6);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_7") == 0){
+				snprintf(srv7, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_7=%s\n", srv7);
+				cfg_params++;
+			}
+			if(strcmp(config_param, "SERVER_NAME_8") == 0){
+				snprintf(srv8, MAX_STR_NAME, "%s", config_value);
+				printf("SERVER_NAME_8=%s\n", srv8);
+				cfg_params++;
+			}
+
 			if(strcmp(config_param, "IHM_ADDRESS") == 0){
 				snprintf(ihm_addr, MAX_STR_NAME, "%s", config_value);
 				printf("IHM_ADDRESS=%s\n", ihm_addr);
@@ -808,7 +832,7 @@ static int read_configuration() {
 			}
 		}
 	}
-	if (cfg_params !=15){
+	if (cfg_params !=19){
 		printf("wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		return -1;
 	}
@@ -1056,7 +1080,23 @@ static int connect_to_iccp_server(MmsConnection * con){
 				MmsConnection_destroy(*con);
 				*con = MmsConnection_create();
 				if ((connect_to_server(*con, srv4) < 0)){
-					return -1;
+					MmsConnection_destroy(*con);
+					*con = MmsConnection_create();
+					if ((connect_to_server(*con, srv5) < 0)){
+						MmsConnection_destroy(*con);
+						*con = MmsConnection_create();
+						if ((connect_to_server(*con, srv6) < 0)){
+							MmsConnection_destroy(*con);
+							*con = MmsConnection_create();
+							if ((connect_to_server(*con, srv7) < 0)){
+								MmsConnection_destroy(*con);
+								*con = MmsConnection_create();
+								if ((connect_to_server(*con, srv8) < 0)){
+									return -1;
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1180,6 +1220,38 @@ int main (int argc, char ** argv){
 
 	// HANDLE REPORTS
 	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
+
+	Thread_sleep(2000);//sleep 2s
+
+
+	/*Control Test 2*/
+	/************************
+	 *          * Select before operate
+	//control = ControlObjectClient_create("PEL3AT1$1XCBR5209$$$$K$C", con);
+	char objectReference[100];
+	memset(objectReference, 0, 100);
+	snprintf(objectReference, 100, "%s", "PEL3AT1$1XCBR5209$$$$K$C");
+	if (ControlObjectClient_select(objectReference, con)) {
+		MmsValue* ctlVal = MmsValue_newBoolean(true);
+		int ctlNum = 0;
+		char hasTimeActivatedMode = 0;
+		char test =0;
+		char interlockCheck =0;
+		char syncroCheck =0;
+	//	if (ControlObjectClient_operate(control, ctlVal, 0 // operate now /)) {
+		if(	ControlObjectClient_operate(objectReference, con, ctlVal, &ctlNum, hasTimeActivatedMode, test, interlockCheck, syncroCheck, 0)){
+			printf("%s operated successfully\n", objectReference);
+		}
+		else {
+			printf("failed to operate %s\n",objectReference);
+		}
+		MmsValue_delete(ctlVal);
+	}
+	else {
+		printf("failed to select %s\n", objectReference);
+	}
+
+	 ************************/
 
 	// LOOP TO MANTAIN CONNECTION ACTIVE	
 	while(running) {
