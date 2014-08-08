@@ -19,7 +19,8 @@ typedef struct {
 	unsigned int sec; // originator address (pode colocar zero)
 	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
 	unsigned int taminfo; // tamanho dos dados em info
-	unsigned char info[255]; // dado no formato padrão iec104
+	unsigned char info[10]; // dado no formato padrão iec104
+	//unsigned char info[255]; // dado no formato padrão iec104
 } t_msgsup;
 
 //Em "info" colocar os dados para valor ponto flutuante ou digital

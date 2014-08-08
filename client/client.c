@@ -20,7 +20,9 @@
 //#define HANDLE_EVENTS_DATA_DEBUG 1
 //#define REPORTS_ONLY_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
-#define DATA_LOG 1
+//#define DEBUG_DIGITAL_REPORTS 1
+//#define DEBUG_EVENTS_REPORTS 1
+//#define DATA_LOG 1
 /*********************************************************************************************************/
 
 static int running = 1; //used on handler for signal interruption
@@ -147,6 +149,13 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		digital[index].time_stamp = time_stamp;
 		digital[index].time_stamp_extended = time_stamp_extended;
 
+#ifdef DEBUG_DIGITAL_REPORTS	
+		if(report){
+			printf("%25s: ", digital[index].id);
+			print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
+		}
+#endif
+
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
 		printf("%25s: ", digital[index].id);
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
@@ -177,6 +186,14 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		events[index].state = state;
 		events[index].time_stamp = time_stamp;
 		events[index].time_stamp_extended = time_stamp_extended;
+
+
+#ifdef DEBUG_EVENTS_REPORTS	
+		if(report){
+			printf("%25s: ", events[index].id);
+			print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
+		}
+#endif
 
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
 		printf("%25s: ", events[index].id);
@@ -583,7 +600,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								}
 							}else if(dataSetValue->value.octetString.buf[0] == 1) {
 								//RULE 1 - not implemented
-								printf("Error - Information Report with rule 1 received\n");
+								fprintf(error_file, "WARNING - Information Report with rule 1 received\n");
+								fflush(error_file);
 								return;
 							}
 							else if (dataSetValue->value.octetString.buf[0] == 2) {
@@ -650,10 +668,10 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									} else {
 										fprintf(error_file,"ERROR - unkonwn information report index %d\n", index);
 										fflush(error_file);
-										int j;
+										/*int j;
 										for (j=0; j < dataSetValue->value.octetString.size; j ++){
 											printf(" %x", dataSetValue->value.octetString.buf[j]);
-										}
+										}*/
 										MmsValue_delete(value);
 										//LinkedList_destroy(attributes);
 										return;
@@ -722,12 +740,37 @@ static int read_configuration() {
 	int cfg_params = 0;
 
 	/*****************
+	 * OPEN LOG FILES
+	 * **********/
+
+	// OPEN ERROR LOG
+	time_t t = time(NULL);
+	struct tm now = *localtime(&t); 
+	snprintf(error_log,MAX_STR_NAME, "iccp_error-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+	error_file = fopen(error_log, "w");
+	if(error_file==NULL){
+		printf("Error, cannot open error log file %s\n",error_log);
+		fclose(error_file);
+		return -1;
+	}
+
+	snprintf(cfg_log,MAX_STR_NAME, "iccp_config-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+	log_file = fopen(cfg_log, "w");
+	if(log_file==NULL){
+		printf("Error, cannot open configuration log file %s\n", cfg_log);
+		fclose(error_file);
+		fclose(log_file);
+		return -1;
+	} 
+
+	/*****************
 	 * READ ICCP CONFIGURATION PARAMETERS
 	 **********/
 
 	file = fopen(ICCP_CLIENT_CONFIG_FILE, "r");
 	if(file==NULL){
-		printf("Error, cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
+		fprintf(error_file, "ERROR -  cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
+		fclose(log_file);
 		return -1;
 	} else{
 		while ( fgets(line, 300, file)){
@@ -737,103 +780,96 @@ static int read_configuration() {
 				break;
 			if(strcmp(config_param, "IDICCP") == 0){
 				snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", config_value);
-				printf("IDICCP=%s\n", IDICCP);
+				fprintf(log_file,"IDICCP=%s\n", IDICCP);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_1") == 0){
 				snprintf(srv1, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_1=%s\n", srv1);
+				fprintf(log_file,"SERVER_NAME_1=%s\n", srv1);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_2") == 0){
 				snprintf(srv2, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_2=%s\n", srv2);
+				fprintf(log_file,"SERVER_NAME_2=%s\n", srv2);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_3") == 0){
 				snprintf(srv3, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_3=%s\n", srv3);
+				fprintf(log_file,"SERVER_NAME_3=%s\n", srv3);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_4") == 0){
 				snprintf(srv4, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_4=%s\n", srv4);
+				fprintf(log_file,"SERVER_NAME_4=%s\n", srv4);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_5") == 0){
 				snprintf(srv5, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_5=%s\n", srv5);
+				fprintf(log_file,"SERVER_NAME_5=%s\n", srv5);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_6") == 0){
 				snprintf(srv6, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_6=%s\n", srv6);
+				fprintf(log_file,"SERVER_NAME_6=%s\n", srv6);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_7") == 0){
 				snprintf(srv7, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_7=%s\n", srv7);
+				fprintf(log_file,"SERVER_NAME_7=%s\n", srv7);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "SERVER_NAME_8") == 0){
 				snprintf(srv8, MAX_STR_NAME, "%s", config_value);
-				printf("SERVER_NAME_8=%s\n", srv8);
+				fprintf(log_file,"SERVER_NAME_8=%s\n", srv8);
 				cfg_params++;
 			}
 
 			if(strcmp(config_param, "IHM_ADDRESS") == 0){
 				snprintf(ihm_addr, MAX_STR_NAME, "%s", config_value);
-				printf("IHM_ADDRESS=%s\n", ihm_addr);
+				fprintf(log_file,"IHM_ADDRESS=%s\n", ihm_addr);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "CONFIG_FILE") == 0){
 				snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
-				printf("CONFIG_FILE=%s\n", cfg_file);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "CONFIG_LOG") == 0){
-				snprintf(cfg_log, MAX_STR_NAME, "%s", config_value);
-				printf("CONFIG_LOG=%s\n", cfg_log);
-				cfg_params++;
-			}if(strcmp(config_param, "ERROR_LOG") == 0){
-				snprintf(error_log, MAX_STR_NAME, "%s", config_value);
-				printf("ERROR_LOG=%s\n", error_log);
+				fprintf(log_file,"CONFIG_FILE=%s\n", cfg_file);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_ANALOG_INTEGRITY_TIME") == 0){
 				analog_gi = atoi(config_value);
-				printf("DATASET_ANALOG_INTEGRITY_TIME=%d\n", analog_gi);
+				fprintf(log_file,"DATASET_ANALOG_INTEGRITY_TIME=%d\n", analog_gi);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_DIGITAL_INTEGRITY_TIME") == 0){
 				digital_gi = atoi(config_value);
-				printf("DATASET_DIGITAL_INTEGRITY_TIME=%d\n", digital_gi);
+				fprintf(log_file,"DATASET_DIGITAL_INTEGRITY_TIME=%d\n", digital_gi);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_EVENTS_INTEGRITY_TIME") == 0){
 				events_gi = atoi(config_value);
-				printf("DATASET_EVENTS_INTEGRITY_TIME=%d\n", events_gi);
+				fprintf(log_file,"DATASET_EVENTS_INTEGRITY_TIME=%d\n", events_gi);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_ANALOG_BUFFER_INTERVAL") == 0){
 				analog_buf = atoi(config_value);
-				printf("DATASET_ANALOG_BUFFER_INTERVAL=%d\n", analog_buf);
+				fprintf(log_file,"DATASET_ANALOG_BUFFER_INTERVAL=%d\n", analog_buf);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_DIGITAL_BUFFER_INTERVAL") == 0){
 				digital_buf = atoi(config_value);
-				printf("DATASET_DIGITAL_BUFFER_INTERVAL=%d\n", digital_buf);
+				fprintf(log_file,"DATASET_DIGITAL_BUFFER_INTERVAL=%d\n", digital_buf);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_EVENTS_BUFFER_INTERVAL") == 0){
 				events_buf = atoi(config_value);
-				printf("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
+				fprintf(log_file,"DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
 				cfg_params++;
 			}
 		}
 	}
-	if (cfg_params !=19){
-		printf("wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
+
+	if (cfg_params!=17){
+		fprintf(error_file, "ERROR - wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
+		fclose(log_file);
 		return -1;
 	}
 
@@ -841,38 +877,33 @@ static int read_configuration() {
 	 * START CONFIGURATIONS
 	 **********/
 
-	// OPEN ERROR LOG
-	error_file = fopen(error_log, "w");
-	if(error_file==NULL){
-		printf("Error, cannot open error log file %s\n",error_log);
-		fclose(error_file);
-		return -1;
-	}
-
     analog = calloc(DATASET_MAX_SIZE*DATASET_ANALOG_MAX_NUMBER, sizeof(data_config) ); 
     digital = calloc(DATASET_MAX_SIZE*DATASET_DIGITAL_MAX_NUMBER, sizeof(data_config) ); 
     events  = calloc(DATASET_MAX_SIZE*DATASET_EVENTS_MAX_NUMBER, sizeof(data_config) ); 
 
 	file = fopen(cfg_file, "r");
 	if(file==NULL){
-		printf("Error, cannot open configuration file %s\n", cfg_file);
+		fprintf(error_file, "ERROR - cannot open configuration file %s\n", cfg_file);
 		return -1;
 	} else{
 		//first two rows of CONFIG_FILE are the reader, discard them
 		if(!fgets(line, 300, file)){
-			printf("Error reading %s file header\n", cfg_file);
+			fprintf(error_file, "ERROR - Error reading %s file header\n", cfg_file);
+			fclose(log_file);
 			return -1;
 		}else {
 			if(sscanf(line, "%*s %*d %*s %d", &ihm_station) <1){
-				printf("cannot get ihm station from header\n");
+				fprintf(error_file, "ERROR - cannot get ihm station from header\n");
+				fclose(log_file);
 				return -1;
 			}else {
-				printf("IHM station %d\n", ihm_station);
+				fprintf(log_file,"IHM station %d\n", ihm_station);
 			}
 		}
 
 		if(!fgets(line, 300, file)){
-			printf("Error reading %s file header second line\n", cfg_file);
+			fprintf(error_file, "ERROR - Error reading %s file header second line\n", cfg_file);
+			fclose(log_file);
 			return -1;
 		}
 
@@ -895,7 +926,7 @@ static int read_configuration() {
 					id_ponto[22] = '$';
 					id_ponto[23] = 'C';
 				}
-				printf("command type for %s discarded\n", id_ponto);
+				fprintf(log_file,"WARNING - command type for %s discarded\n", id_ponto);
 			}//Command Analog
 			else if(type == 'A' && origin ==7 ){
 				//add $C to the end of command
@@ -903,7 +934,7 @@ static int read_configuration() {
 					id_ponto[22] = '$';
 					id_ponto[23] = 'C';
 				}
-				printf("command type for %s discarded\n", id_ponto);
+				fprintf(log_file,"WARNING - command type for %s discarded\n", id_ponto);
 			}
 		   	//Events
 			else if(type == 'D' && event == 3){
@@ -961,17 +992,11 @@ static int read_configuration() {
 				num_of_analog_ids++;
 			} //Unknown 
 			else {
-				printf("ERROR reading configuration file! Unknown type");
+				fprintf(error_file,"WARNING - ERROR reading configuration file! Unknown type");
+				fflush(error_file);
 			}
 		}
 	}
-
-	log_file = fopen(cfg_log, "w");
-	if(log_file==NULL){
-		printf("Error, cannot open configuration log file %s\n", cfg_log);
-		fclose(file);
-		return -1;
-	} 
 
 	fprintf(log_file, "***************ANALOG***********************\n");
 	for (i=0; i < num_of_analog_ids; i++) {
@@ -1171,34 +1196,45 @@ int main (int argc, char ** argv){
 
 
 	// DELETE DATASETS WHICH WILL BE USED
-	printf("deleting dada sets\n");
+	printf("deleting dada sets     ");
 	for (i=0; i < num_of_datasets; i++) {
+		fflush(stdout);
 		MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
+		printf(".");
 	}
+	printf("\n");
 
 	// CREATE TRASNFERSETS ON REMOTE SERVER	
-	printf("creating transfer sets\n");
+	printf("creating transfer sets ");
 	for (i=0; i < num_of_datasets; i++){
+		fflush(stdout);
 		MmsValue *transfer_set_dig  = get_next_transferset(con,IDICCP,  error_file);
 		if( transfer_set_dig == NULL) {	
-			printf("Could not create transfer set for digital data\n");
+			printf("\nCould not create transfer set for digital data\n");
 			cleanup_variables(con);
 			return -1;
 		} else {
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
 			MmsValue_delete(transfer_set_dig);
 		}
+		Thread_sleep(50);//sleep 50ms for different report times (better handling)
+		printf(".");
 	}	
+	printf("\n");
 
 	// CREATE DATASETS WITH CUSTOM VARIABLES
-	printf("creating data sets\n");
+	printf("creating data sets     ");
 	for (i=0; i < num_of_datasets; i++){
+		fflush(stdout);
 		create_dataset(con, dataset_conf[i].id,i);
+		printf(".");
 	}
+	printf("\n");
 
 	// WRITE DATASETS TO TRANSFERSET
-	printf("writing data sets\n");
+	printf("writing data sets      ");
 	for (i=0; i < num_of_datasets; i++){
+		fflush(stdout);
 		if(dataset_conf[i].type == DATASET_ANALOG) 
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, analog_gi, 0);
 		else if(dataset_conf[i].type == DATASET_DIGITAL)
@@ -1206,21 +1242,29 @@ int main (int argc, char ** argv){
 		else if(dataset_conf[i].type == DATASET_EVENTS)
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, events_gi, 1);
 		else{
-			printf("unknown write dataset type\n");
+			printf("\nunknown write dataset type\n");
 			cleanup_variables(con);
 			return -1;
 		}
+		Thread_sleep(50);//sleep 50ms for different report times (better handling)
+		printf(".");
 	}
+	printf("\n");
 	
 	// READ VARIABLES
-	printf("*************Reading DS Values********************\n");
+	printf("Reading data sets      ");
 	for (i=0; i < num_of_datasets; i++){
+		fflush(stdout);
 		read_dataset(con, dataset_conf[i].id, i);
+		Thread_sleep(50);//sleep 50ms in order to space handling for udp packets on ihm interface(better handling)
+		printf(".");
 	}
+	printf("\n");
+
 
 	// HANDLE REPORTS
 	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
-
+	printf("ICCP Process Successfully Started!\n");
 	Thread_sleep(2000);//sleep 2s
 
 
