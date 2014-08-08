@@ -12,5 +12,7 @@
 *.h.gch
 build/*
 bin/*
+client/iccp_client*
+inspector/inspector*
 .cproject
 .project
