@@ -1267,6 +1267,45 @@ int main (int argc, char ** argv){
 	printf("ICCP Process Successfully Started!\n");
 	Thread_sleep(2000);//sleep 2s
 
+	/*
+
+	MmsError mmsCmdError;
+	MmsValue* readvalue =
+		MmsConnection_readVariable(con, &mmsCmdError, NULL, "PEL3AT1$1XCBR5209$$$$K$C_SBO");
+
+	if (readvalue == NULL)
+		printf("reading value failed! %d\n", mmsCmdError);
+	else{
+		printf("Read SBO value %d\n",MmsValue_toInt32(readvalue));
+		//MmsValue_setInt32(readvalue, 0);
+		MmsValue_delete(readvalue);
+		MmsValue* writeValue= MmsValue_newIntegerFromInt32(0);
+		printf("write variable\n");
+		MmsConnection_writeVariable(con, &mmsCmdError, NULL, "PEL3AT1$1XCBR5209$$$$K$C", writeValue);
+		if(mmsCmdError != MMS_ERROR_NONE)
+			printf("Error writing variable %d\n", mmsCmdError);
+		printf("write variable done\n");
+		MmsValue_delete(writeValue);
+	}*/
+
+	MmsError mmsCmdError;
+	MmsValue*	readvalue =
+		MmsConnection_readVariable(con, &mmsCmdError, NULL, "PEL3AT1$$YTAP$$$$$$$$K$C_SBO");
+
+	if (readvalue == NULL)
+		printf("reading value failed! %d\n", mmsCmdError);
+	else{
+		printf("Read SBO value %d\n",MmsValue_toInt32(readvalue));
+		//MmsValue_setInt32(readvalue, 0);
+		MmsValue_delete(readvalue);
+		MmsValue* writeValue= MmsValue_newIntegerFromInt32(1);
+		printf("write variable\n");
+		MmsConnection_writeVariable(con, &mmsCmdError, NULL, "PEL3AT1$$YTAP$$$$$$$$K$C", writeValue);
+		if(mmsCmdError != MMS_ERROR_NONE)
+			printf("Error writing variable %d\n", mmsCmdError);
+		printf("write variable done\n");
+		MmsValue_delete(writeValue);
+	}
 
 	/*Control Test 2*/
 	/************************

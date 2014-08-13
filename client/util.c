@@ -251,7 +251,7 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 
 	loop_value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Bilateral_Table_ID");
 	if (loop_value == NULL){ 
-		printf("loop value == NULL \n");
+		fprintf(error_file, "WARNING - loop value == NULL \n");
 		if (mmsError == MMS_ERROR_CONNECTION_LOST){
 			printf("conexão perdida\n");
 			fprintf(error_file, "ERROR - Connection lost\n");
@@ -259,17 +259,17 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 		}
 		else if (mmsError == MMS_ERROR_SERVICE_TIMEOUT){
 			loop_error++;
-			printf("timeout resposta - %d\n", loop_error);
+			fprintf(error_file, " WARN - timeout resposta - %d\n", loop_error);
 			if(loop_error < MAX_READ_ERRORS){
 				fprintf(error_file,"WARN - Read Service Timeout %d - mmsError %d\n", loop_error, mmsError);
 			}else {
-				printf("aborting due to consecutive Read Service Timeouts\n");
+				fprintf(error_file, "aborting due to consecutive Read Service Timeouts\n");
 				fprintf(error_file, "ERROR - aborting due to consecutive Read Service Timeouts\n");
 				return -1;
 			}
 		} else if (mmsError == MMS_ERROR_NONE) {
 			loop_error++;
-			printf("loop_erro %d\n", loop_error);
+			fprintf(error_file, "WARN - loop_erro %d\n", loop_error);
 			if(loop_error < MAX_READ_ERRORS){
 				fprintf(error_file,"WARN - loop error %d reading value - mmsError %d\n", loop_error, mmsError);
 			}else {
