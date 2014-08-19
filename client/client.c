@@ -584,10 +584,19 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										}
 										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
-										if(analog[index].not_present)
-											offset_size=RULE0_DIGITAL_REPORT_SIZE;//TODO: for analog non existent objects the size is 7 and not threated
+										offset_size=RULE0_ANALOG_REPORT_SIZE;
+										if(analog[index].not_present){
+											if(octet_offset+2 <= dataSetValue->value.octetString.size){ 
+												if(dataSetValue->value.octetString.buf[octet_offset] == 0x53 && dataSetValue->value.octetString.buf[octet_offset+1] == 0xf3) {
+													if(octet_offset+6 <= dataSetValue->value.octetString.size){ 
+														if(dataSetValue->value.octetString.buf[octet_offset+6] == 0x71){
+															offset_size=RULE0_DIGITAL_REPORT_SIZE;//TODO: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
+														}
+													}
+												}
+											}
+										}
 										else{ 
-											offset_size=RULE0_ANALOG_REPORT_SIZE;
 											if(octet_offset+offset_size <= dataSetValue->value.octetString.size) {
 												float_data data_value;
 												data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
@@ -1246,7 +1255,7 @@ int main (int argc, char ** argv){
 		printf("Error reading configuration\n");
 		return -1;
 	} else {
-		printf("Start configuration with %d analog, %d digital, %d events and %d datasets\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_datasets);
+		printf("Start configuration with %d analog, %d digital, %d events, %d commands, and %d datasets\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands, num_of_datasets);
 	}
 
 	// OPEN DATA LOG FILES	
