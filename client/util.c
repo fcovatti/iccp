@@ -322,7 +322,7 @@ int command_variable(MmsConnection con, FILE *error_file, char * variable, int v
 		return -1;
 	}
 	else{
-		printf("Read %s SBO value %d\n",variable, MmsValue_toInt32(readvalue));
+		//printf("Read %s SBO value %d\n",variable, MmsValue_toInt32(readvalue));
 		//MmsValue_setInt32(readvalue, 0);
 		MmsValue_delete(readvalue);
 		MmsValue* writeValue= MmsValue_newIntegerFromInt32(value);

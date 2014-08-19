@@ -85,6 +85,7 @@ typedef struct {
 	char id[25];
 	char type;
 	unsigned int monitored;
+	unsigned char utr_addr;
 } command_config;
 
 typedef enum{

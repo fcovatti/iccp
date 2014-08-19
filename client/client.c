@@ -127,7 +127,7 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report, 0);
+			send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report);
 		}
 	}
 	return 0;
@@ -164,7 +164,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report, 0);
+			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report);
 		}
 	}
 	return 0;
@@ -203,7 +203,7 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report, 0);
+			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report);
 		}
 	}
 	return 0;
@@ -954,6 +954,8 @@ static int read_configuration() {
 					commands[num_of_commands].type = DATASET_COMMAND_DIGITAL;
 				else
 					commands[num_of_commands].type = DATASET_COMMAND_ANALOG;
+
+				commands[num_of_commands].utr_addr = utr_addr;
 				num_of_commands++;
 			}//Events
 			else if(type == 'D' && event == 3){
@@ -1199,36 +1201,17 @@ static void check_commands(MmsConnection con){
 		if(i<num_of_commands){
 			fprintf(error_file, "Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
 					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
-			printf("Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
-					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
+
+			//send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 1); //CMD ERROR
+			//send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 1); //CMD ERROR
 			if(command_variable(con, error_file, commands[i].id, cmd_recv.onoff)<0){
+				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 0); //CMD ERROR
 				fprintf(error_file,"Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
 				fflush(error_file);
 			} else {
-				int j;
+				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 1); //CMD OK
 				fprintf(error_file,"Done writing %d to %s\n", cmd_recv.onoff, commands[i].id);
 				fflush(error_file);
-				printf("Done writing %d to %s variable\n", cmd_recv.onoff, commands[i].id);
-				if (commands[i].type== DATASET_COMMAND_DIGITAL){
-					for(j=0; j<num_of_digital_ids; j++){
-						if(digital[j].nponto == commands[i].monitored){
-							printf("send digital cmd response\n");
-							send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[j].nponto, digital[j].utr_addr, ihm_station, digital[j].state, digital[j].time_stamp, digital[j].time_stamp_extended, 0, 1);
-							break;
-						}
-					}
-				}else if (commands[i].type== DATASET_COMMAND_ANALOG){
-					for(j=0; j<num_of_analog_ids; j++){
-						if(analog[j].nponto == commands[i].monitored){
-							printf("send anlog cmd response\n");
-							send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[j].nponto, analog[j].utr_addr,ihm_station, analog[j].f, analog[j].state, 0, 1);
-							break;
-						}
-					}
-				}else{
-					fprintf(error_file,"Wrong command type %d for %s \n", commands[i].type, commands[i].id);
-					fflush(error_file);
-				}
 			}
 		}else{
 			char * cmd_debug = (char *)&cmd_recv;
