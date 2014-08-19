@@ -10,6 +10,7 @@
 #include "util.h"
 #include "client.h"
 
+/*********************************************************************************************************/
 void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported)
 {
 	//global
@@ -200,6 +201,7 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 	MmsValue_delete(dataset);
 }
 
+/*********************************************************************************************************/
 MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_file)
 {
 //READ DATASETS
@@ -243,6 +245,7 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_
 	return returnValue;
 }
 
+/*********************************************************************************************************/
 
 int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 	static int loop_error;
@@ -288,6 +291,7 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 	return 0;
 }
 
+/*********************************************************************************************************/
 int connect_to_server(MmsConnection con, char * server)
 {
 
@@ -301,3 +305,39 @@ int connect_to_server(MmsConnection con, char * server)
 	printf("Connection Error %d %d - server %s\n", indication, mmsError, server);
 	return -1;
 }
+
+/*********************************************************************************************************/
+int command_variable(MmsConnection con, FILE *error_file, char * variable, int value)
+{
+	MmsError mmsCmdError;
+	char select_before_operate[MAX_STR_NAME];
+	snprintf(select_before_operate, MAX_STR_NAME, "%s_SBO", variable);
+
+	MmsValue*	readvalue =
+		MmsConnection_readVariable(con, &mmsCmdError, NULL, select_before_operate);
+
+	if (readvalue == NULL){
+		fprintf(error_file, "ERROR - could not read command %s \n", select_before_operate);
+		fflush(error_file);
+		return -1;
+	}
+	else{
+		printf("Read %s SBO value %d\n",variable, MmsValue_toInt32(readvalue));
+		//MmsValue_setInt32(readvalue, 0);
+		MmsValue_delete(readvalue);
+		MmsValue* writeValue= MmsValue_newIntegerFromInt32(value);
+		MmsConnection_writeVariable(con, &mmsCmdError, NULL, variable, writeValue);
+		MmsValue_delete(writeValue);
+		if(mmsCmdError != MMS_ERROR_NONE){
+			fprintf(error_file, "ERROR - could not write command %s, value %d, mmsError %d \n", variable, value, mmsCmdError);
+			fflush(error_file);
+			return -1;
+		} else{
+			fprintf(error_file, "INFO - write command %s, value %d \n", variable, value);
+			fflush(error_file);
+		}
+	}
+	return 0;
+}
+
+/*********************************************************************************************************/

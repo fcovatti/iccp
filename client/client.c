@@ -31,6 +31,7 @@ static int running = 1; //used on handler for signal interruption
 static int num_of_analog_ids = 0;	
 static int num_of_digital_ids = 0;	
 static int num_of_event_ids = 0;	
+static int num_of_commands = 0;	
 
 static int num_of_datasets = 0;
 static int num_of_analog_datasets = 0;
@@ -40,6 +41,7 @@ static int num_of_event_datasets = 0;
 static data_config * analog = NULL;
 static data_config * digital = NULL;
 static data_config * events = NULL;
+static command_config * commands = NULL;
 
 static dataset_config * dataset_conf = NULL;
 
@@ -50,7 +52,8 @@ static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX
 static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
 
 static char ihm_addr[MAX_STR_NAME];
-static int ihm_socket=0;
+static int ihm_socket_send=0;
+static int ihm_socket_receive=0;
 static int ihm_enabled=0;
 static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
@@ -123,8 +126,8 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
-		if(ihm_enabled && ihm_socket > 0){
-			send_analog_to_ihm(ihm_socket, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report);
+		if(ihm_enabled && ihm_socket_send > 0){
+			send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report, 0);
 		}
 	}
 	return 0;
@@ -160,8 +163,8 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		printf("%25s: ", digital[index].id);
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
-		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report);
+		if(ihm_enabled && ihm_socket_send > 0){
+			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report, 0);
 		}
 	}
 	return 0;
@@ -199,8 +202,8 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		printf("%25s: ", events[index].id);
 		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
-		if(ihm_enabled && ihm_socket > 0){
-			send_digital_to_ihm(ihm_socket, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report);
+		if(ihm_enabled && ihm_socket_send > 0){
+			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report, 0);
 		}
 	}
 	return 0;
@@ -263,6 +266,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 				if(analog_value == NULL) {
 					fprintf(error_file, "ERROR - could not get floating point value %s - nponto %d\n", analog[idx].id, analog[idx].nponto);
 					fflush(error_file);
+					analog[idx].not_present=1;
 					//TODO if non existent object return -1;
 				}else { 
 					analog_data = MmsValue_toFloat(analog_value);
@@ -275,10 +279,9 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					} else {
 						data_state = analog_value->value.bitString.buf[0];
 					}
+					time( &time_stamp);
+					handle_analog_integrity(analog_data, data_state,idx , time_stamp);
 				}
-				time( &time_stamp);
-
-				handle_analog_integrity(analog_data, data_state,idx , time_stamp);
 			} else if(dataset_conf[offset].type == DATASET_DIGITAL){
 				data_state = 0;
 				//First element Data_TimeStampExtended
@@ -288,6 +291,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					fflush(error_file);
 					time(&time_stamp); //use system time stamp
 					time_stamp_extended=0;
+					digital[idx].not_present=1;
 					//TODO if non existent object return -1;
 				}else{
 					//printf("nponto %d extended %x %x \n", digital[idx].nponto, dataSetElem->value.octetString.buf[0], dataSetElem->value.octetString.buf[1]);	
@@ -311,8 +315,8 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					}else {
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
+					handle_digital_integrity(data_state, idx, time_stamp, time_stamp_extended); 
 				}
-				handle_digital_integrity(data_state, idx, time_stamp, time_stamp_extended); 
 			} else if(dataset_conf[offset].type == DATASET_EVENTS){
 				data_state = 0;
 				//First element Data_TimeStampExtended
@@ -322,6 +326,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					fflush(error_file);
 					time(&time_stamp); //use system time stamp
 					time_stamp_extended=0;
+					events[idx].not_present=1;
 					//TODO if non existent object return -1;
 				}else{
 					ts_extended[1]= dataSetElem->value.octetString.buf[0];
@@ -332,7 +337,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					if(timeStamp == NULL) {
 						fprintf(error_file, "ERROR - could not get event timestamp value %s - nponto %d\n", events[idx].id, events[idx].nponto);
 						fflush(error_file);
-						return -1;
+						//return -1;
 					}
 					time_stamp = MmsValue_toUint32(timeStamp);
 					
@@ -345,10 +350,8 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					}else {
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
+					handle_event_integrity(data_state, idx, time_stamp,time_stamp_extended); 		
 				}
-				handle_event_integrity(data_state, idx, time_stamp,time_stamp_extended); 		
-			} else if(dataset_conf[offset].type == DATASET_COMMANDS){
-				printf("command dataset\n");
 			} else{
 				fprintf(error_file, "ERROR - unknown configuration type for dataset %d offset %d\n", offset, idx);
 				fflush(error_file);
@@ -456,6 +459,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	char * transfer_set = NULL;
 	MmsError mmsError;
 	int octet_offset = 0;
+	int offset_size = 0;
 	unsigned short time_stamp_extended =0;
 	unsigned char * ts_extended;
 	ts_extended = (char *)&time_stamp_extended;
@@ -546,52 +550,58 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
-										if(octet_offset+ RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
-											time_data time_value;
-											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
-											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
-											
-											handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
-										} else {
-											fprintf(error_file, "ERROR - wrong digital report octet size %d, offset %d - data %d bytes - ds %d, idx %d \n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index );
-											fflush(error_file);
+										if(!digital[index].not_present){//In order to not threat non existent objects
+											if( octet_offset+ RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
+												time_data time_value;
+												time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+												time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+												time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+												time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+												ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
+												ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
+												handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
+											} else {
+												fprintf(error_file, "ERROR - wrong digital report octet size %d, offset %d - data %d bytes - ds %d, idx %d \n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index );
+												fflush(error_file);
+											}
 										}
 										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
-										if(octet_offset+RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
-											time_data time_value;
-											time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-											time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-											time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-											time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-											ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
-											ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
-											handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
-										} else {
-											fprintf(error_file, "ERROR - wrong event report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index);
-											fflush(error_file);
+										if(!events[index].not_present){ //In order to not threat non existent objects
+											if( octet_offset+RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size){
+												time_data time_value;
+												time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+												time_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+												time_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+												time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+												ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
+												ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
+												handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
+											} else {
+												fprintf(error_file, "ERROR - wrong event report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index);
+												fflush(error_file);
+											}
 										}
 										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
-										if(octet_offset+RULE0_ANALOG_REPORT_SIZE <= dataSetValue->value.octetString.size) {
-											float_data data_value;
-											data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
-											data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
-											data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
-											data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-											handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
-										} else {
-											fprintf(error_file, "ERROR - wrong analog report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_ANALOG_REPORT_SIZE, offset, index);
-											fflush(error_file);
+										if(analog[index].not_present)
+											offset_size=RULE0_DIGITAL_REPORT_SIZE;//TODO: for analog non existent objects the size is 7 and not threated
+										else{ 
+											offset_size=RULE0_ANALOG_REPORT_SIZE;
+											if(octet_offset+offset_size <= dataSetValue->value.octetString.size) {
+												float_data data_value;
+												data_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
+												data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
+												data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
+												data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
+												handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+											} else {
+												fprintf(error_file, "ERROR - wrong analog report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_ANALOG_REPORT_SIZE, offset, index);
+												fflush(error_file);
+											}
 										}
-										octet_offset = octet_offset + RULE0_ANALOG_REPORT_SIZE;
-									} else if(dataset_conf[offset].type == DATASET_COMMANDS){
-										printf("command no report\n");
-									} else {
+										octet_offset = octet_offset + offset_size;
+									}  else {
 										fprintf(error_file, "ERROR - wrong index %d\n", offset);
 										fflush(error_file);
 										return;
@@ -727,6 +737,7 @@ static int read_configuration() {
 	int origin = 0;
 	int event = 0;
 	unsigned int nponto = 0;
+	unsigned int nponto_monitored = 0;
 	char id_ponto[MAX_STR_NAME] = "";
 	char state_name[MAX_STR_NAME] = "";
 	int state_split = 0;
@@ -880,6 +891,7 @@ static int read_configuration() {
     analog = calloc(DATASET_MAX_SIZE*DATASET_ANALOG_MAX_NUMBER, sizeof(data_config) ); 
     digital = calloc(DATASET_MAX_SIZE*DATASET_DIGITAL_MAX_NUMBER, sizeof(data_config) ); 
     events  = calloc(DATASET_MAX_SIZE*DATASET_EVENTS_MAX_NUMBER, sizeof(data_config) ); 
+    commands  = calloc(COMMANDS_MAX_NUMBER , sizeof(command_config) ); 
 
 	file = fopen(cfg_file, "r");
 	if(file==NULL){
@@ -909,7 +921,7 @@ static int read_configuration() {
 
 		while ( fgets(line, 300, file)){
 			//if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
-			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %d %*d %*f %*f %*d %d", &nponto,  id_ponto, &type, state_name, &origin, &utr_addr, &event ) <1)
+			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %d %*d %*f %*f %d %d", &nponto,  id_ponto, &type, state_name, &origin, &utr_addr, &nponto_monitored, &event ) <1)
 				break;
 
 			//change - for $
@@ -919,24 +931,22 @@ static int read_configuration() {
 				}
 			}
 	
-			//Command Digital
-			if(type == 'D' && origin ==7 ){
+			//Command Digital or Analog
+			if((type == 'D'||type=='A') && origin ==7 ){
 				//add $C to the end of command
 				if (id_ponto[21] == 'K') {
 					id_ponto[22] = '$';
 					id_ponto[23] = 'C';
 				}
-				fprintf(log_file,"WARNING - command type for %s discarded\n", id_ponto);
-			}//Command Analog
-			else if(type == 'A' && origin ==7 ){
-				//add $C to the end of command
-				if (id_ponto[21] == 'K') {
-					id_ponto[22] = '$';
-					id_ponto[23] = 'C';
-				}
-				fprintf(log_file,"WARNING - command type for %s discarded\n", id_ponto);
-			}
-		   	//Events
+				memcpy(commands[num_of_commands].id,id_ponto,25);
+				commands[num_of_commands].nponto = nponto;
+				commands[num_of_commands].monitored = nponto_monitored;
+				if(type=='D')
+					commands[num_of_commands].type = DATASET_COMMAND_DIGITAL;
+				else
+					commands[num_of_commands].type = DATASET_COMMAND_ANALOG;
+				num_of_commands++;
+			}//Events
 			else if(type == 'D' && event == 3){
 				memcpy(events[num_of_event_ids].id,id_ponto,25);
 				events[num_of_event_ids].nponto = nponto;
@@ -1013,6 +1023,11 @@ static int read_configuration() {
 		fprintf(log_file, "%d %d \t%s\t \n",i, events[i].nponto,  events[i].id);
 	}
 
+	fprintf(log_file, "***************COMMANDS***********************\n");
+	for (i=0; i < num_of_commands; i++) {
+		fprintf(log_file, "%d %d \t%s\t %d \t\n",i, commands[i].nponto,  commands[i].id, commands[i].monitored);
+	}
+
 	num_of_analog_datasets = num_of_analog_ids/DATASET_MAX_SIZE;
 	if(num_of_analog_ids%DATASET_MAX_SIZE)
 		num_of_analog_datasets++;
@@ -1063,8 +1078,10 @@ static void cleanup_variables(MmsConnection con)
 	free(digital);
 	free(events);
 	MmsConnection_destroy(con);
-	if(ihm_enabled)
-		close(ihm_socket);
+	if(ihm_enabled){
+		close(ihm_socket_send);
+		close(ihm_socket_receive);
+	}
 }
 
 /*********************************************************************************************************/
@@ -1132,17 +1149,89 @@ static int connect_to_iccp_server(MmsConnection * con){
 /*********************************************************************************************************/
 
 static int create_ihm_comm(){
-	ihm_socket = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
-	if(ihm_socket < 0){
+	ihm_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
+	if(ihm_socket_send < 0){
 		printf("could not create UDP socket to trasmit to IHM\n");
 		return -1;
 	}	
 	printf("Created UDP socket for IHM %s Port %d\n",ihm_addr, PORT_IHM_TRANSMIT);
+
+	ihm_socket_receive = prepare_Wait(ihm_addr, PORT_IHM_LISTEN);
+	if(ihm_socket_receive < 0){
+		printf("could not create UDP socket to listen to IHM\n");
+		close(ihm_socket_send);
+		return -1;
+	}
+	printf("Created UDP local socket for IHM Port %d\n",PORT_IHM_LISTEN);
 	return 0;
 }
 
 /*********************************************************************************************************/
-
+static void check_commands(MmsConnection con){
+	char * msg_rcv;
+	msg_rcv = WaitT(ihm_socket_receive, 2000);	
+	if(msg_rcv != NULL) {
+		int i;
+		t_msgcmd cmd_recv = {0};
+		memcpy(&cmd_recv, msg_rcv, sizeof(t_msgcmd));
+		if(cmd_recv.signature != 0x4b4b4b4b) {
+			char * cmd_debug = (char *)&cmd_recv;
+			fprintf(error_file,"ERROR - command received with wrong signature!\n");  
+			for (i=0; i < sizeof(t_msgcmd); i++){
+				fprintf(error_file," %02x", cmd_debug[i]);
+			}
+			fprintf(error_file,"\n");
+			fflush(error_file);
+		}
+		for (i=0; i < num_of_commands; i++) {
+			if(cmd_recv.endereco==commands[i].nponto)
+				break;
+		}
+		if(i<num_of_commands){
+			fprintf(error_file, "Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
+					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
+			printf("Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
+					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
+			if(command_variable(con, error_file, commands[i].id, cmd_recv.onoff)<0){
+				fprintf(error_file,"Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
+				fflush(error_file);
+			} else {
+				int j;
+				fprintf(error_file,"Done writing %d to %s\n", cmd_recv.onoff, commands[i].id);
+				fflush(error_file);
+				printf("Done writing %d to %s variable\n", cmd_recv.onoff, commands[i].id);
+				if (commands[i].type== DATASET_COMMAND_DIGITAL){
+					for(j=0; j<num_of_digital_ids; j++){
+						if(digital[j].nponto == commands[i].monitored){
+							printf("send digital cmd response\n");
+							send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[j].nponto, digital[j].utr_addr, ihm_station, digital[j].state, digital[j].time_stamp, digital[j].time_stamp_extended, 0, 1);
+							break;
+						}
+					}
+				}else if (commands[i].type== DATASET_COMMAND_ANALOG){
+					for(j=0; j<num_of_analog_ids; j++){
+						if(analog[j].nponto == commands[i].monitored){
+							printf("send anlog cmd response\n");
+							send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[j].nponto, analog[j].utr_addr,ihm_station, analog[j].f, analog[j].state, 0, 1);
+							break;
+						}
+					}
+				}else{
+					fprintf(error_file,"Wrong command type %d for %s \n", commands[i].type, commands[i].id);
+					fflush(error_file);
+				}
+			}
+		}else{
+			char * cmd_debug = (char *)&cmd_recv;
+			fprintf(error_file,"ERROR - command received %d not found! \n", cmd_recv.endereco);  
+			for (i=0; i < sizeof(t_msgcmd); i++){
+				fprintf(error_file," %02x", cmd_debug[i]);
+			}
+			fprintf(error_file,"\n");
+			fflush(error_file);
+		}
+	}
+}
 
 /*********************************************************************************************************/
 
@@ -1261,86 +1350,17 @@ int main (int argc, char ** argv){
 	}
 	printf("\n");
 
-
 	// HANDLE REPORTS
 	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
 	printf("ICCP Process Successfully Started!\n");
-	Thread_sleep(2000);//sleep 2s
-
-	/*
-
-	MmsError mmsCmdError;
-	MmsValue* readvalue =
-		MmsConnection_readVariable(con, &mmsCmdError, NULL, "PEL3AT1$1XCBR5209$$$$K$C_SBO");
-
-	if (readvalue == NULL)
-		printf("reading value failed! %d\n", mmsCmdError);
-	else{
-		printf("Read SBO value %d\n",MmsValue_toInt32(readvalue));
-		//MmsValue_setInt32(readvalue, 0);
-		MmsValue_delete(readvalue);
-		MmsValue* writeValue= MmsValue_newIntegerFromInt32(0);
-		printf("write variable\n");
-		MmsConnection_writeVariable(con, &mmsCmdError, NULL, "PEL3AT1$1XCBR5209$$$$K$C", writeValue);
-		if(mmsCmdError != MMS_ERROR_NONE)
-			printf("Error writing variable %d\n", mmsCmdError);
-		printf("write variable done\n");
-		MmsValue_delete(writeValue);
-	}*/
-
-	MmsError mmsCmdError;
-	MmsValue*	readvalue =
-		MmsConnection_readVariable(con, &mmsCmdError, NULL, "PEL3AT1$$YTAP$$$$$$$$K$C_SBO");
-
-	if (readvalue == NULL)
-		printf("reading value failed! %d\n", mmsCmdError);
-	else{
-		printf("Read SBO value %d\n",MmsValue_toInt32(readvalue));
-		//MmsValue_setInt32(readvalue, 0);
-		MmsValue_delete(readvalue);
-		MmsValue* writeValue= MmsValue_newIntegerFromInt32(1);
-		printf("write variable\n");
-		MmsConnection_writeVariable(con, &mmsCmdError, NULL, "PEL3AT1$$YTAP$$$$$$$$K$C", writeValue);
-		if(mmsCmdError != MMS_ERROR_NONE)
-			printf("Error writing variable %d\n", mmsCmdError);
-		printf("write variable done\n");
-		MmsValue_delete(writeValue);
-	}
-
-	/*Control Test 2*/
-	/************************
-	 *          * Select before operate
-	//control = ControlObjectClient_create("PEL3AT1$1XCBR5209$$$$K$C", con);
-	char objectReference[100];
-	memset(objectReference, 0, 100);
-	snprintf(objectReference, 100, "%s", "PEL3AT1$1XCBR5209$$$$K$C");
-	if (ControlObjectClient_select(objectReference, con)) {
-		MmsValue* ctlVal = MmsValue_newBoolean(true);
-		int ctlNum = 0;
-		char hasTimeActivatedMode = 0;
-		char test =0;
-		char interlockCheck =0;
-		char syncroCheck =0;
-	//	if (ControlObjectClient_operate(control, ctlVal, 0 // operate now /)) {
-		if(	ControlObjectClient_operate(objectReference, con, ctlVal, &ctlNum, hasTimeActivatedMode, test, interlockCheck, syncroCheck, 0)){
-			printf("%s operated successfully\n", objectReference);
-		}
-		else {
-			printf("failed to operate %s\n",objectReference);
-		}
-		MmsValue_delete(ctlVal);
-	}
-	else {
-		printf("failed to select %s\n", objectReference);
-	}
-
-	 ************************/
-
-	// LOOP TO MANTAIN CONNECTION ACTIVE	
+	
+	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {
-		if (check_connection(con,IDICCP,  error_file) < 0)
+		if(ihm_enabled)
+			check_commands(con);
+		
+		if (check_connection(con,IDICCP, error_file) < 0)
 			break;
-		Thread_sleep(2000);//sleep 2s
 	}
 
 	cleanup_variables(con);

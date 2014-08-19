@@ -16,7 +16,7 @@ IHM_ADDRESS="10.63.77.174";
 //IHM_ADDRESS="no";
 
 // Name of the configuration file
-CONFIG_FILE="sage_id_no_1.txt";
+CONFIG_FILE="sage_id_no_74.txt";
 
 // Time in seconds for buffering an event on a dataset before reporting to the client
 DATASET_ANALOG_BUFFER_INTERVAL="10";

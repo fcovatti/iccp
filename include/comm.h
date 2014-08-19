@@ -29,30 +29,15 @@ typedef struct {
 typedef struct { // tipo 1
 	unsigned char iq;  // informaçao com qualificador no formato iec104
 } digital_seq;
-/*
-typedef struct { // tipo 30
-	unsigned char iq;  // informaçao com qualificador no formato iec104
-	unsigned short ms;   // milisegundos
-	unsigned char min;
-	unsigned char hora;
-	unsigned char dia;
-	unsigned char mes;
-	unsigned char ano;
-} digital_w_time7_seq;
-*/
 
 typedef struct { // tipo 30
 	unsigned char iq;  // informaçao com qualificador no formato iec104
 	unsigned short ms;   // milisegundos
-	//unsigned char ms[2];   // milisegundos
 	unsigned char min;   // milisegundos
-	//unsigned char ms;
-//	unsigned char min;//ano;
 	unsigned char hora;//min;
 	unsigned char dia;//hora
 	unsigned char mes;//dia;
 	unsigned char ano;//mes;
-//	unsigned char min;
 } __attribute__((packed))digital_w_time7_seq; 
 
 typedef struct { // tipo 13
@@ -78,11 +63,15 @@ typedef struct
 #define PORT_IHM_TRANSMIT  	8099
 #define PORT_IHM_LISTEN   	8098
 
+int prepare_Wait(char * addr, int port);
+
+void * WaitT(unsigned int socketfd, int timeout_ms);
+
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr);
 
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr);
 
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
+void send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report, char cmd_response);
 
-void send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report);
+void send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report, char cmd_response);
 #endif

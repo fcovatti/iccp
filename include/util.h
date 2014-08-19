@@ -117,6 +117,8 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *    error_file);
 
 int connect_to_server(MmsConnection con, char * server);
 
+int command_variable(MmsConnection con, FILE *error_file, char * varibale, int value);
+
 static inline void print_value (char state, bool ana, time_t time_stamp, unsigned short time_stamp_extended, char * state_on, char * state_off) {
 	struct tm * time_result;
 	MmsValue * value = MmsValue_newBitString(8);

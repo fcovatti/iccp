@@ -126,7 +126,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 
 		memcpy((char *) &server_addr->sin_addr.s_addr, (char *) server->h_addr, server->h_length);
 	}
-	else{
+	else {
 		printf("null address\n");
 		server_addr->sin_addr.s_addr = htonl(INADDR_ANY);
 	}
@@ -154,9 +154,86 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 }
 #endif
 
+/*********************************************************************************************************/
+int prepare_Wait(char * addr, int port)
+{
+	int socketfd;
+	struct sockaddr_in servSock;
+#ifdef WIN32
+	int ec;
+	WSADATA wsa;
+
+	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
+		printf("winsock error: code %i\n");
+		return -1;
+	}
+#endif
+
+	/*Create a UDP socket for incoming connections*/
+	if ( (socketfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
+		printf("Error creating a udp socket port %d!\n", port);
+		return -1;
+	}
+
+	memset(&servSock, 0, sizeof(servSock));
+
+	servSock.sin_family = AF_INET;
+	servSock.sin_port = htons(port);
+	servSock.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	/* 2) Assign a port to a socket(bind)*/
+	if ( bind(socketfd, (const struct sockaddr *)&servSock, sizeof(servSock) ) < 0) {
+		close(socketfd);
+		fprintf(stderr, "Error on bind port %d.. %s\r\n", port, strerror(errno));
+#ifdef WIN32
+	WSACleanup();
+#endif
+		return -1;
+	}
+
+	return socketfd;
+
+}
 
 /*********************************************************************************************************/
-void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report){
+void * WaitT(unsigned int socketfd, int timeout_ms) {
+	void * buf = NULL;
+	int n, ret;
+	fd_set readfds;
+	struct timeval timeout_sock;
+	
+	FD_ZERO(&readfds);
+	FD_SET(socketfd, &readfds);
+	timeout_sock.tv_sec = timeout_ms/1000;
+	timeout_sock.tv_usec = (timeout_ms%1000)*1000;
+	if(timeout_ms)
+		ret = select(socketfd + 1, &readfds, NULL, NULL, &timeout_sock);
+	else
+		ret = select(socketfd + 1, &readfds, NULL, NULL, NULL);
+	if (ret < 0) {
+		printf("select error socket %d\n", socketfd);
+		return NULL;
+	} else if (ret == 0) {
+		return NULL;
+	}
+
+	if (FD_ISSET(socketfd, &readfds)) {
+
+		buf = malloc(2000);
+		n = recv(socketfd, buf, 2000, 0);
+#ifdef DEBUG_MSGS
+		printf("read %d bytes socketd %d\n", n, socketfd);
+#endif
+		if (n < 0) {
+			printf("ERROR reading from socket %d\n", socketfd);
+			free(buf);
+			return NULL;
+		}
+	}
+	return buf;
+}
+/*********************************************************************************************************/
+void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report, char cmd_response){
  
 			t_msgsup msg_sup;
 			flutuante_seq float_value;
@@ -172,6 +249,9 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			else
 				msg_sup.causa=20; //integrity
 
+			if(cmd_response)
+				msg_sup.causa=msg_sup.causa|0x40; //command response
+			
 			msg_sup.taminfo=sizeof(flutuante_seq);
 			
 			if(!(state&0x10) && !(state&0x20)) 
@@ -189,7 +269,7 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }	
 /*********************************************************************************************************/
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report, char cmd_response){
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
@@ -228,15 +308,12 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 		msg_sup.taminfo=sizeof(digital_w_time7_seq);
 		digital_value.iq = digital_state;
 		time_result = (struct tm *)localtime(&time_stamp);
-		//digital_value.ms[1]=(time_result->tm_sec*10)&0xFF;
-		//digital_value.ms[0]=((time_result->tm_sec*10)>>8)&0xFF;
 		digital_value.ms=(time_result->tm_sec*1000)+time_stamp_extended;
 		digital_value.min=time_result->tm_min;
 		digital_value.hora=time_result->tm_hour;
 		digital_value.dia=time_result->tm_mday;
 		digital_value.mes=time_result->tm_mon+1;
 		digital_value.ano=time_result->tm_year-100;
-		//printf("nponto %d day %d, mon %d, yer %d, hora %d, min %d, ms %d\n", msg_sup.endereco, digital_value.dia,digital_value.mes, digital_value.ano, digital_value.hora, digital_value.min, digital_value.ms);
 		memcpy(msg_sup.info,(char *) &digital_value, sizeof(digital_w_time7_seq));
 	}
 	else {

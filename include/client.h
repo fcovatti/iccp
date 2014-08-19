@@ -44,6 +44,10 @@
 // MAx number of datasets allowed on the client
 #define DATASET_EVENTS_MAX_NUMBER 150
 
+// MAx number of commands allowed on the client(maximum number for sage is 20000)
+#define COMMANDS_MAX_NUMBER 20000
+
+
 // Name of the data received log file
 #define DATA_ANALOG_LOG "iccp_data_analog.bin"
 #define DATA_DIGITAL_LOG "iccp_data_digital.bin"
@@ -73,13 +77,22 @@ typedef struct {
 	time_t time_stamp;
 	unsigned short time_stamp_extended;
 	unsigned char utr_addr;
+	unsigned char not_present;
 } data_config;
+
+typedef struct {
+	unsigned int nponto;
+	char id[25];
+	char type;
+	unsigned int monitored;
+} command_config;
 
 typedef enum{
 	DATASET_ANALOG,
 	DATASET_DIGITAL,
 	DATASET_EVENTS,
-	DATASET_COMMANDS
+	DATASET_COMMAND_DIGITAL,
+	DATASET_COMMAND_ANALOG,
 } DataSetTypes;
 
 typedef struct {
