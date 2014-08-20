@@ -293,11 +293,12 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 	if((state&0x08) && !(state&0x04))
 		digital_state=digital_state|0x20; //manual
 
-	if(state&0x01 && report){ 
+	if(state&0x01){ 
 		digital_state=digital_state|0x08; //invalid timestamp
 	}
 
-	if(report){
+	//only send as report if timestamp is valid
+	if(!(state&0x01) && report){
 		struct tm * time_result;
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
@@ -341,7 +342,7 @@ void send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_add
 	}
 	msg_sup.tipo=45; //IHM accepts all types
 	msg_sup.taminfo=sizeof(digital_seq);
-	digital_value_gi.iq = 0;
+	digital_value_gi.iq = 1;
 	memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
 
 	SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);

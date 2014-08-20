@@ -21,7 +21,7 @@
 //#define REPORTS_ONLY_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
 //#define DEBUG_DIGITAL_REPORTS 1
-//#define DEBUG_EVENTS_REPORTS 1
+//#define DEBUG_EVENTS_REPORTS	1
 //#define DATA_LOG 1
 /*********************************************************************************************************/
 
@@ -153,7 +153,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		digital[index].time_stamp_extended = time_stamp_extended;
 
 #ifdef DEBUG_DIGITAL_REPORTS	
-		if(report){
+		if(!(state&0x01)&&report){
 			printf("%25s: ", digital[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 		}
@@ -190,9 +190,8 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		events[index].time_stamp = time_stamp;
 		events[index].time_stamp_extended = time_stamp_extended;
 
-
 #ifdef DEBUG_EVENTS_REPORTS	
-		if(report){
+		if(!(state&0x01)&&report){
 			printf("%25s: ", events[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 		}
@@ -1333,7 +1332,7 @@ int main (int argc, char ** argv){
 	printf("\n");
 	
 	// READ VARIABLES
-	printf("Reading data sets      ");
+	printf("reading data sets      ");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		read_dataset(con, dataset_conf[i].id, i);

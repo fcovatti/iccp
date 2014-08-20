@@ -256,7 +256,7 @@ int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
 	if (loop_value == NULL){ 
 		fprintf(error_file, "WARNING - loop value == NULL \n");
 		if (mmsError == MMS_ERROR_CONNECTION_LOST){
-			printf("conexão perdida\n");
+			printf("connection lost :(\n");
 			fprintf(error_file, "ERROR - Connection lost\n");
 			return -1;
 		}

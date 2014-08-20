@@ -133,55 +133,55 @@ static inline void print_value (char state, bool ana, time_t time_stamp, unsigne
 	if (!ana) {
 		//ESTADO
 		if (MmsValue_getBitStringBit(value,0) && !MmsValue_getBitStringBit(value,1)) {
-			printf("1-%-16s |", state_off);
+			printf("1-%-16s|", state_off);
 		}else if (!MmsValue_getBitStringBit(value,0) && MmsValue_getBitStringBit(value,1)) {
-			printf("0-%-16s |", state_on);
+			printf("0-%-16s|", state_on);
 		} else {
-			printf ("       Invalid    |");
+			printf ("       Invalid   |");
 		}
 	}
 
 	//Validade
 	if (!MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
-		printf("Valido   |");
+		printf("Valid  |");//valido
 	}else if (!MmsValue_getBitStringBit( value,2) && MmsValue_getBitStringBit(value,3)) {
-		printf("Segurado |");
+		printf("Held   |");//segurado
 	}else if (MmsValue_getBitStringBit(value,2) && !MmsValue_getBitStringBit(value,3)) {
-		printf("Suspeito |");
+		printf("Suspect|");//suspeito
 	} else {
-		printf("Inválido |");
+		printf("Invalid|");//invalido
 	}
 
 	// Origem
 	if (!MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
-		printf("Telemedido |");
+		printf("Tele|");//telemedido
 	}else if (!MmsValue_getBitStringBit(value,4) && MmsValue_getBitStringBit(value,5)) {
-		printf("Calculado  |");
+		printf("Calc|");//calculado
 	}else if (MmsValue_getBitStringBit(value,4) && !MmsValue_getBitStringBit(value,5)) {
-		printf("Manual     |");
+		printf("Manl|");//manual
 	} else {
-		printf ("Estimado  |");
+		printf("Est |");//estimado
 	}
 
 	// Valor Normal
 	if (!MmsValue_getBitStringBit(value,6)){
-		printf ("Normal  |");
+		printf ("Norm |");//Normal
 	} else {
-		printf ("Anormal |");
+		printf ("Anorm|");//Anormal
 	}
 
 	// Estampa de tempo
 	if (!MmsValue_getBitStringBit(value,7)){
-		printf ("T Valida   |");
+		printf ("TVal |");//valida
 	} else {
-		printf ("T Invalida |");
+		printf ("TInvl|");//invalida
 	}
 
 	time_result = localtime(&time_stamp);
-	if(!ana)
-		printf("%d:%s ", time_stamp_extended, asctime(time_result));
-	else
-		printf("%s ", asctime(time_result));
+	/*if(!ana)
+		printf("%d:%s", time_stamp_extended, asctime(time_result));
+	else*/
+		printf("%s", asctime(time_result));
 
 }
 
