@@ -1349,6 +1349,8 @@ int main (int argc, char ** argv){
 	while(running) {
 		if(ihm_enabled)
 			check_commands(con);
+		else
+			Thread_sleep(2000);
 		
 		if (check_connection(con,IDICCP, error_file) < 0)
 			break;
