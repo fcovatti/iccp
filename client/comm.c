@@ -49,6 +49,8 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 	int ec;
 	WSADATA wsa;
 	SOCKET listen_socket = INVALID_SOCKET;
+	socklen_t optlen;
+	int buf_size = 163840;
 
 	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
 		printf("winsock error: code %i\n");
@@ -67,7 +69,11 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 		WSACleanup();
 		return -1;
 	}
-
+	
+	optlen = sizeof(int);
+	setsockopt(listen_socket,SOL_SOCKET, SO_SNDBUF, (char *) &buf_size, optlen);
+	setsockopt(listen_socket,SOL_SOCKET, SO_RCVBUF, (char *) &buf_size, optlen);
+	
 	return listen_socket;
 }
 
@@ -148,6 +154,7 @@ int prepare_Wait(char * addr, int port)
 {
 	int socketfd;
 	struct sockaddr_in servSock;
+
 #ifdef WIN32
 	int ec;
 	WSADATA wsa;
