@@ -91,6 +91,7 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 		fprintf(stderr, "Error sending msg to IHM!\r\n");
 		return -1;
 	}
+	return 0;
 }
 
 #else
@@ -233,7 +234,7 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 	return buf;
 }
 /*********************************************************************************************************/
-void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report){
+int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report){
  
 			t_msgsup msg_sup;
 			flutuante_seq float_value;
@@ -263,10 +264,10 @@ void send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 			
 			float_value.fr=value;
 			memcpy(msg_sup.info,(char *) &float_value, sizeof(flutuante_seq));
-			SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
+			return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }	
 /*********************************************************************************************************/
-void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
@@ -324,10 +325,10 @@ void send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,uns
 	}
 
 	
-	SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
+	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }
 /*********************************************************************************************************/
-void send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok){
+int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok){
 	t_msgsup msg_sup;
 	digital_seq digital_value_gi;
 	memset(&msg_sup, 0, sizeof(t_msgsup));
@@ -345,6 +346,6 @@ void send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_add
 	digital_value_gi.iq = 1;
 	memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
 
-	SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
+	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }
 /*********************************************************************************************************/

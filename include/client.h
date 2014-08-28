@@ -78,6 +78,7 @@ typedef struct {
 	unsigned short time_stamp_extended;
 	unsigned char utr_addr;
 	unsigned char not_present;
+	unsigned int num_of_msg_rcv;
 } data_config;
 
 typedef struct {
@@ -102,6 +103,7 @@ typedef struct {
 	DataSetTypes type;
 	int size;
 	unsigned int offset;
+	int num_of_rcv_gi;
 } dataset_config;
 
 typedef struct {

@@ -49,7 +49,7 @@ static char IDICCP[MAX_ID_ICCP_NAME];
 
 static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
 static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
-static int analog_gi=0, digital_gi=0, events_gi=0, analog_buf=0, digital_buf=0, events_buf=0;
+static int integrity_time=0, analog_buf=0, digital_buf=0, events_buf=0;
 
 static char ihm_addr[MAX_STR_NAME];
 static int ihm_socket_send=0;
@@ -57,6 +57,7 @@ static int ihm_socket_receive=0;
 static int ihm_enabled=0;
 static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
+static struct timeval start, now;
 /*********************************************************************************************************/
 
 #ifdef DATA_LOG
@@ -72,6 +73,12 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
 static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
+static float get_time_ms(){
+	float time_ms;
+	gettimeofday(&now, NULL);
+	time_ms= (((now.tv_sec-start.tv_sec)*1000 + (now.tv_usec-start.tv_usec)/1000)+0.5)/1000;
+	return time_ms;
+}
 /*********************************************************************************************************/
 void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
 	handle_analog_state(value,state,index,time_stamp,1);
@@ -121,13 +128,17 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		analog[index].f = value;
 		analog[index].state = state;
 		analog[index].time_stamp = time_stamp;
+		analog[index].num_of_msg_rcv++;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report);
+			if (send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report) < 0){
+				fprintf(error_file, "Error sending nponto %d\n", analog[index].nponto);
+				fflush(error_file);
+			}
 		}
 	}
 	return 0;
@@ -151,6 +162,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		digital[index].state = state;
 		digital[index].time_stamp = time_stamp;
 		digital[index].time_stamp_extended = time_stamp_extended;
+		digital[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_DIGITAL_REPORTS	
 		if(!(state&0x01)&&report){
@@ -164,7 +176,10 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report);
+			if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report) < 0){
+				fprintf(error_file, "Error sending nponto %d\n", digital[index].nponto);
+				fflush(error_file);
+			}
 		}
 	}
 	return 0;
@@ -189,6 +204,7 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		events[index].state = state;
 		events[index].time_stamp = time_stamp;
 		events[index].time_stamp_extended = time_stamp_extended;
+		events[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_EVENTS_REPORTS	
 		if(!(state&0x01)&&report){
@@ -202,7 +218,10 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report);
+			if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report) < 0){
+				fprintf(error_file, "Error sending nponto %d\n", digital[index].nponto);
+				fflush(error_file);
+			}
 		}
 	}
 	return 0;
@@ -546,6 +565,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 
 								octet_offset = 1; 
 								index = dataset_conf[offset].offset; // config index
+								dataset_conf[offset].num_of_rcv_gi++;
+								printf("%07.1f - ds %d gi %d\n", get_time_ms(),  offset,dataset_conf[offset].num_of_rcv_gi);
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
@@ -765,7 +786,7 @@ static int read_configuration() {
 	// OPEN ERROR LOG
 	time_t t = time(NULL);
 	struct tm now = *localtime(&t); 
-	snprintf(error_log,MAX_STR_NAME, "iccp_error-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+	snprintf(error_log,MAX_STR_NAME, "iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
 	error_file = fopen(error_log, "w");
 	if(error_file==NULL){
 		printf("Error, cannot open error log file %s\n",error_log);
@@ -853,19 +874,9 @@ static int read_configuration() {
 				fprintf(log_file,"CONFIG_FILE=%s\n", cfg_file);
 				cfg_params++;
 			}
-			if(strcmp(config_param, "DATASET_ANALOG_INTEGRITY_TIME") == 0){
-				analog_gi = atoi(config_value);
-				fprintf(log_file,"DATASET_ANALOG_INTEGRITY_TIME=%d\n", analog_gi);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_DIGITAL_INTEGRITY_TIME") == 0){
-				digital_gi = atoi(config_value);
-				fprintf(log_file,"DATASET_DIGITAL_INTEGRITY_TIME=%d\n", digital_gi);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_EVENTS_INTEGRITY_TIME") == 0){
-				events_gi = atoi(config_value);
-				fprintf(log_file,"DATASET_EVENTS_INTEGRITY_TIME=%d\n", events_gi);
+			if(strcmp(config_param, "DATASET_INTEGRITY_TIME") == 0){
+				integrity_time = atoi(config_value);
+				fprintf(log_file,"DATASET_INTEGRITY_TIME=%d\n", integrity_time);
 				cfg_params++;
 			}
 			if(strcmp(config_param, "DATASET_ANALOG_BUFFER_INTERVAL") == 0){
@@ -886,7 +897,7 @@ static int read_configuration() {
 		}
 	}
 
-	if (cfg_params!=17){
+	if (cfg_params!=15){
 		fprintf(error_file, "ERROR - wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		fclose(log_file);
 		return -1;
@@ -1019,23 +1030,27 @@ static int read_configuration() {
 	}
 
 	fprintf(log_file, "***************ANALOG***********************\n");
+	fprintf(log_file, " DATASET OFFSET NPONTO DESCRITIVO\n");
 	for (i=0; i < num_of_analog_ids; i++) {
-		fprintf(log_file, "%d %d \t%s\t \n",i, analog[i].nponto,  analog[i].id);
+		fprintf(log_file, "%d %d %d \t%s\t \n",((i+1)/DATASET_MAX_SIZE), i, analog[i].nponto,  analog[i].id);
 	}
 
 	fprintf(log_file, "***************DIGITAL***********************\n");
+	fprintf(log_file, " DATASET OFFSET NPONTO DESCRITIVO\n");
 	for (i=0; i < num_of_digital_ids; i++) {
-		fprintf(log_file, "%d %d \t%s\t \n",i, digital[i].nponto,  digital[i].id);
+		fprintf(log_file, "%d %d %d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, digital[i].nponto,  digital[i].id);
 	}
 
 	fprintf(log_file, "***************EVENTS***********************\n");
+	fprintf(log_file, " DATASET OFFSET NPONTO DESCRITIVO\n");
 	for (i=0; i < num_of_event_ids; i++) {
-		fprintf(log_file, "%d %d \t%s\t \n",i, events[i].nponto,  events[i].id);
+		fprintf(log_file, "%d %d %d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, events[i].nponto,  events[i].id);
 	}
 
 	fprintf(log_file, "***************COMMANDS***********************\n");
+	fprintf(log_file, " OFFSET NPONTO SUPERV DESCRITIVO \n");
 	for (i=0; i < num_of_commands; i++) {
-		fprintf(log_file, "%d %d \t%s\t %d \t\n",i, commands[i].nponto,  commands[i].id, commands[i].monitored);
+		fprintf(log_file, "%d %d \t %d \t%s \t\n",i, commands[i].nponto, commands[i].monitored,  commands[i].id);
 	}
 
 	num_of_analog_datasets = num_of_analog_ids/DATASET_MAX_SIZE;
@@ -1075,7 +1090,26 @@ static void sigint_handler(int signalId)
 
 static void cleanup_variables(MmsConnection con)
 {
+	int i;
 	printf("cleanning up variables\n");
+
+	fprintf(error_file, "***************ANALOG***********************\n");
+	fprintf(error_file, " DATASET OFFSET NPONTO RCV_MSGS DESCRITIVO\n");
+	for (i=0; i < num_of_analog_ids; i++) {
+		fprintf(error_file, "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, analog[i].nponto, analog[i].num_of_msg_rcv, analog[i].id);
+	}
+
+	fprintf(error_file, "***************DIGITAL***********************\n");
+	fprintf(error_file, " DATASET OFFSET NPONTO RCV_MSGS DESCRITIVO\n");
+	for (i=0; i < num_of_digital_ids; i++) {
+		fprintf(error_file, "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, digital[i].nponto, digital[i].num_of_msg_rcv, digital[i].id);
+	}
+
+	fprintf(error_file, "***************EVENTS***********************\n");
+	fprintf(error_file, " DATASET OFFSET NPONTO RCV_MSGS DESCRITIVO\n");
+	for (i=0; i < num_of_event_ids; i++) {
+		fprintf(error_file, "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, events[i].nponto, events[i].num_of_msg_rcv, events[i].id);
+	}
 
 #ifdef DATA_LOG
 	fclose(data_file_analog);
@@ -1231,13 +1265,14 @@ int main (int argc, char ** argv){
 	MmsError mmsError;
 	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
-		
+	gettimeofday(&start, NULL);
 	// READ CONFIGURATION FILE
 	if (read_configuration() != 0) {
 		printf("Error reading configuration\n");
 		return -1;
 	} else {
-		printf("Start configuration with %d analog, %d digital, %d events, %d commands, and %d datasets\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands, num_of_datasets);
+		printf("Start configuration with:\n  %d analog, %d digital, %d events, %d commands\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands);
+		printf("  %d datasets:\n   - %d analog\n   - %d digital \n   - %d events \n", num_of_datasets, num_of_analog_datasets, num_of_digital_datasets, num_of_event_datasets);
 	}
 
 	// OPEN DATA LOG FILES	
@@ -1276,7 +1311,7 @@ int main (int argc, char ** argv){
 
 
 	// DELETE DATASETS WHICH WILL BE USED
-	printf("deleting dada sets     ");
+	printf("%07.1f deleting data sets     ", get_time_ms());
 	for (i=0; i < num_of_datasets; i++) {
 		fflush(stdout);
 		MmsConnection_deleteNamedVariableList(con,&mmsError, IDICCP, dataset_conf[i].id);
@@ -1285,7 +1320,7 @@ int main (int argc, char ** argv){
 	printf("\n");
 
 	// CREATE TRASNFERSETS ON REMOTE SERVER	
-	printf("creating transfer sets ");
+	printf("%07.1f creating transfer sets ", get_time_ms());
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		MmsValue *transfer_set_dig  = get_next_transferset(con,IDICCP,  error_file);
@@ -1297,13 +1332,13 @@ int main (int argc, char ** argv){
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
 			MmsValue_delete(transfer_set_dig);
 		}
-		Thread_sleep(50);//sleep 50ms for different report times (better handling)
+		//Thread_sleep(50);//sleep 50ms for different report times (better handling)
 		printf(".");
 	}	
 	printf("\n");
 
 	// CREATE DATASETS WITH CUSTOM VARIABLES
-	printf("creating data sets     ");
+	printf("%07.1f creating data sets     ", get_time_ms());
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		create_dataset(con, dataset_conf[i].id,i);
@@ -1311,39 +1346,36 @@ int main (int argc, char ** argv){
 	}
 	printf("\n");
 
+	// HANDLE REPORTS
+	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
+
 	// WRITE DATASETS TO TRANSFERSET
-	printf("writing data sets      ");
+	printf("%07.1f Write/Read data sets   ", get_time_ms());
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
-		if(dataset_conf[i].type == DATASET_ANALOG) 
-			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, analog_gi, 0);
-		else if(dataset_conf[i].type == DATASET_DIGITAL)
-			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf, digital_gi, 1);
-		else if(dataset_conf[i].type == DATASET_EVENTS)
-			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, events_gi, 1);
+		if(dataset_conf[i].type == DATASET_ANALOG){ 
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, 0);
+			read_dataset(con, dataset_conf[i].id, i);
+		}
+		else if(dataset_conf[i].type == DATASET_DIGITAL){
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf,integrity_time, 1);
+			read_dataset(con, dataset_conf[i].id, i);
+		}
+		else if(dataset_conf[i].type == DATASET_EVENTS){
+			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, integrity_time, 1);
+			read_dataset(con, dataset_conf[i].id, i);
+		}
 		else{
 			printf("\nunknown write dataset type\n");
 			cleanup_variables(con);
 			return -1;
 		}
-		Thread_sleep(50);//sleep 50ms for different report times (better handling)
+		Thread_sleep(1100);//sleep 1.1s for different report times (better handling)
 		printf(".");
 	}
 	printf("\n");
 	
-	// READ VARIABLES
-	printf("reading data sets      ");
-	for (i=0; i < num_of_datasets; i++){
-		fflush(stdout);
-		read_dataset(con, dataset_conf[i].id, i);
-		Thread_sleep(50);//sleep 50ms in order to space handling for udp packets on ihm interface(better handling)
-		printf(".");
-	}
-	printf("\n");
-
-	// HANDLE REPORTS
-	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
-	printf("ICCP Process Successfully Started!\n");
+	printf("%07.1f ICCP Process Successfully Started!\n", get_time_ms());
 	
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {

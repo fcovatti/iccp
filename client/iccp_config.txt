@@ -2,7 +2,7 @@
 IDICCP="HIS";
 
 // Name or IP of the remote iccp servers (tries to connect in ascending order)
-SERVER_NAME_1="10.63.5.43";
+SERVER_NAME_1="10.63.5.41";
 SERVER_NAME_2="lab-ems1";
 SERVER_NAME_3="ems3";
 SERVER_NAME_4="ems3";
@@ -12,8 +12,8 @@ SERVER_NAME_7="ems3";
 SERVER_NAME_8="ems3";
 
 //Name or IP of the IHM (if no IHM configured use "no")
-IHM_ADDRESS="10.63.77.174";
-//IHM_ADDRESS="no";
+//IHM_ADDRESS="10.63.77.174";
+IHM_ADDRESS="no";
 
 // Name of the configuration file
 CONFIG_FILE="sage_id.txt";
@@ -24,7 +24,5 @@ DATASET_DIGITAL_BUFFER_INTERVAL="1";
 DATASET_EVENTS_BUFFER_INTERVAL="1";
 
 // Time in seconds for Integrity check (configured on the remote server on initialization)
-DATASET_ANALOG_INTEGRITY_TIME="60";
-DATASET_DIGITAL_INTEGRITY_TIME="90";
-DATASET_EVENTS_INTEGRITY_TIME="120";
+DATASET_INTEGRITY_TIME="180";
 
