@@ -202,7 +202,7 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 }
 
 /*********************************************************************************************************/
-MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_file)
+MmsValue * get_next_transferset(MmsConnection con, char * id_iccp)
 {
 //READ DATASETS
 	MmsError mmsError;
@@ -211,31 +211,31 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_
 	value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Next_DSTransfer_Set");
 	
 	if (value == NULL){                                                                                                                
-		fprintf(error_file, "ERROR - reading transfer set value failed! %d\n", mmsError);                                                                                                   
+		LOG_MESSAGE( "ERROR - reading transfer set value failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	}
 	MmsValue* ts_elem;
 	ts_elem = MmsValue_getElement(value, 0);
 	if (ts_elem == NULL){
-		fprintf(error_file, "ERROR - reading transfer set value 0 failed! %d\n", mmsError);                                                                                                   
+		LOG_MESSAGE( "ERROR - reading transfer set value 0 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	}
 
 	ts_elem = MmsValue_getElement(value, 1);
 	if (ts_elem == NULL){
-		fprintf(error_file, "ERROR - reading transfer set value 1 failed! %d\n", mmsError);                                                                                                   
+		LOG_MESSAGE( "ERROR - reading transfer set value 1 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	} else {
 		//printf("Read transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
 		if(strncmp(MmsValue_toString(ts_elem), id_iccp, sizeof(id_iccp)) != 0){
-			fprintf(error_file, "ERROR - Wrong domain id\n");
+			LOG_MESSAGE( "ERROR - Wrong domain id\n");
 			return NULL;
 		}
 	}
 
 	ts_elem = MmsValue_getElement(value, 2);
 	if (ts_elem == NULL){
-		fprintf(error_file, "ERROR - reading transfer set value 2 failed! %d\n", mmsError);                                                                                                   
+		LOG_MESSAGE( "ERROR - reading transfer set value 2 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	} else {
 		//printf("Read transfer set name: %s\n", MmsValue_toString(ts_elem));
@@ -247,41 +247,41 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_
 
 /*********************************************************************************************************/
 
-int check_connection(MmsConnection con, char * id_iccp, FILE *	error_file) {
+int check_connection(MmsConnection con, char * id_iccp) {
 	static int loop_error;
 	MmsError mmsError;
 	MmsValue* loop_value = NULL;
 
 	loop_value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Bilateral_Table_ID");
 	if (loop_value == NULL){ 
-		fprintf(error_file, "WARNING - loop value == NULL \n");
+		LOG_MESSAGE( "WARNING - loop value == NULL \n");
 		if (mmsError == MMS_ERROR_CONNECTION_LOST){
 			printf("connection lost :(\n");
-			fprintf(error_file, "ERROR - Connection lost\n");
+			LOG_MESSAGE( "ERROR - Connection lost\n");
 			return -1;
 		}
 		else if (mmsError == MMS_ERROR_SERVICE_TIMEOUT){
 			loop_error++;
-			fprintf(error_file, " WARN - timeout resposta - %d\n", loop_error);
+			LOG_MESSAGE( " WARN - timeout resposta - %d\n", loop_error);
 			if(loop_error < MAX_READ_ERRORS){
-				fprintf(error_file,"WARN - Read Service Timeout %d - mmsError %d\n", loop_error, mmsError);
+				LOG_MESSAGE("WARN - Read Service Timeout %d - mmsError %d\n", loop_error, mmsError);
 			}else {
-				fprintf(error_file, "aborting due to consecutive Read Service Timeouts\n");
-				fprintf(error_file, "ERROR - aborting due to consecutive Read Service Timeouts\n");
+				LOG_MESSAGE( "aborting due to consecutive Read Service Timeouts\n");
+				LOG_MESSAGE( "ERROR - aborting due to consecutive Read Service Timeouts\n");
 				return -1;
 			}
 		} else if (mmsError == MMS_ERROR_NONE) {
 			loop_error++;
-			fprintf(error_file, "WARN - loop_erro %d\n", loop_error);
+			LOG_MESSAGE( "WARN - loop_erro %d\n", loop_error);
 			if(loop_error < MAX_READ_ERRORS){
-				fprintf(error_file,"WARN - loop error %d reading value - mmsError %d\n", loop_error, mmsError);
+				LOG_MESSAGE("WARN - loop error %d reading value - mmsError %d\n", loop_error, mmsError);
 			}else {
 				printf("aborting due to consecutive errors reading value\n");
-				fprintf(error_file, "ERROR - aborting due to consecutive errors reading value\n");
+				LOG_MESSAGE( "ERROR - aborting due to consecutive errors reading value\n");
 				return -1;
 			}
 		} else {
-			fprintf(error_file, " ERROR - Unkwnon read error %d error. Aborting!\n", mmsError);
+			LOG_MESSAGE( " ERROR - Unkwnon read error %d error. Aborting!\n", mmsError);
 			return -1;
 		}
 	}else{                                                                                                                                     
@@ -307,7 +307,7 @@ int connect_to_server(MmsConnection con, char * server)
 }
 
 /*********************************************************************************************************/
-int command_variable(MmsConnection con, FILE *error_file, char * variable, int value)
+int command_variable(MmsConnection con, char * variable, int value)
 {
 	MmsError mmsCmdError;
 	char select_before_operate[MAX_STR_NAME];
@@ -317,8 +317,7 @@ int command_variable(MmsConnection con, FILE *error_file, char * variable, int v
 		MmsConnection_readVariable(con, &mmsCmdError, NULL, select_before_operate);
 
 	if (readvalue == NULL){
-		fprintf(error_file, "ERROR - could not read command %s \n", select_before_operate);
-		fflush(error_file);
+		LOG_MESSAGE( "ERROR - could not read command %s \n", select_before_operate);
 		return -1;
 	}
 	else{
@@ -329,15 +328,18 @@ int command_variable(MmsConnection con, FILE *error_file, char * variable, int v
 		MmsConnection_writeVariable(con, &mmsCmdError, NULL, variable, writeValue);
 		MmsValue_delete(writeValue);
 		if(mmsCmdError != MMS_ERROR_NONE){
-			fprintf(error_file, "ERROR - could not write command %s, value %d, mmsError %d \n", variable, value, mmsCmdError);
-			fflush(error_file);
+			LOG_MESSAGE( "ERROR - could not write command %s, value %d, mmsError %d \n", variable, value, mmsCmdError);
 			return -1;
 		} else{
-			fprintf(error_file, "INFO - write command %s, value %d \n", variable, value);
-			fflush(error_file);
+			LOG_MESSAGE( "INFO - write command %s, value %d \n", variable, value);
 		}
 	}
 	return 0;
 }
 
 /*********************************************************************************************************/
+void print_time(FILE * log_file){
+	time_t t = time(NULL);
+	struct tm now = *localtime(&t); 
+	fprintf(log_file, "%04d/%02d/%02d %02d:%02d:%02d - ", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min,now.tm_sec);
+}

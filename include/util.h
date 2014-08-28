@@ -13,6 +13,10 @@
 #include "config.h"
 #endif 
 
+extern FILE * error_file;
+#define LOG_MESSAGE(...)	do { print_time(error_file); fprintf(error_file, __VA_ARGS__); fflush(error_file); } while(false)
+void print_time(FILE * log_file);
+
 #ifdef _WIN32
 #ifndef WIN32
 #define WIN32
@@ -111,13 +115,13 @@
 
 void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported);
 
-MmsValue * get_next_transferset(MmsConnection con, char * id_iccp, FILE * error_file);
+MmsValue * get_next_transferset(MmsConnection con, char * id_iccp);
 
-int check_connection(MmsConnection con, char * id_iccp, FILE *    error_file);
+int check_connection(MmsConnection con, char * id_iccp);
 
 int connect_to_server(MmsConnection con, char * server);
 
-int command_variable(MmsConnection con, FILE *error_file, char * varibale, int value);
+int command_variable(MmsConnection con, char * varibale, int value);
 
 static inline void print_value (char state, bool ana, time_t time_stamp, unsigned short time_stamp_extended, char * state_on, char * state_off) {
 	struct tm * time_result;

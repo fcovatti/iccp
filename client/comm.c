@@ -68,18 +68,6 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 		return -1;
 	}
 
-
-	/*
-	int optionReuseAddr = 1;
-	setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&optionReuseAddr, sizeof(int));
-	ec = bind(listen_socket, (struct sockaddr*)&server_addr, sizeof(server_addr));
-
-	if (ec == SOCKET_ERROR) {
-		printf("bind failed with error:%i\n", WSAGetLastError());
-		closesocket(listen_socket);
-		WSACleanup();
-		return -1;
-	} */
 	return listen_socket;
 }
 
