@@ -21,6 +21,7 @@
 #include <windows.h>
 
 
+/*********************************************************************************************************/
 static bool
 prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr) 
 {
@@ -43,6 +44,7 @@ prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr)
     return true;
 }
 
+/*********************************************************************************************************/
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 
 	ServerSocket serverSocket = NULL;
@@ -71,12 +73,16 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 	}
 	
 	optlen = sizeof(int);
+	getsockopt(listen_socket,SOL_SOCKET, SO_SNDBUF, (char *) &buf_size, &optlen);
+	printf("socket size %d\n", buf_size);
+
 	setsockopt(listen_socket,SOL_SOCKET, SO_SNDBUF, (char *) &buf_size, optlen);
 	setsockopt(listen_socket,SOL_SOCKET, SO_RCVBUF, (char *) &buf_size, optlen);
 	
 	return listen_socket;
 }
 
+/*********************************************************************************************************/
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr){
 #ifdef DEBUG_MSGS
 	printf("Sending message size %d\n", msg_size);
@@ -97,6 +103,7 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 #include <netdb.h>
 #include <arpa/inet.h>
 
+/*********************************************************************************************************/
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 {
 	int socketfd;
@@ -229,8 +236,24 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 	return buf;
 }
 /*********************************************************************************************************/
-int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report){
- 
+static unsigned char get_analog_state(unsigned char state)
+{
+	unsigned char analog_state;
+	if(!(state&0x10) && !(state&0x20)) 
+		analog_state=0;//valid
+	else if((state&0x10) && !(state&0x20))
+		analog_state=0x10;//held/blocked
+	else
+		analog_state=0x80;//invalid
+
+	if((state&0x08) && !(state&0x04))
+		analog_state = analog_state|0x20; //manual
+
+	return analog_state;
+}
+/*********************************************************************************************************/
+int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report)
+{
 			t_msgsup msg_sup;
 			flutuante_seq float_value;
 			memset(&msg_sup, 0, sizeof(t_msgsup));
@@ -247,31 +270,48 @@ int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsig
 
 			msg_sup.taminfo=sizeof(flutuante_seq);
 			
-			if(!(state&0x10) && !(state&0x20)) 
-				float_value.qds=0;//valid
-			else if((state&0x10) && !(state&0x20))
-				float_value.qds=0x10;//held/blocked
-			else
-				float_value.qds=0x80;//invalid
-
-			if((state&0x08) && !(state&0x04))
-				float_value.qds = float_value.qds|0x20; //manual
+			float_value.qds = get_analog_state(state);
 			
 			float_value.fr=value;
 			memcpy(msg_sup.info,(char *) &float_value, sizeof(flutuante_seq));
 			return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }	
-/*********************************************************************************************************/
-int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
-	t_msgsup msg_sup;
-	unsigned char digital_state;
 
-	memset(&msg_sup, 0, sizeof(t_msgsup));
-	msg_sup.signature = 0x53535353;
-	msg_sup.endereco = nponto;
-	msg_sup.prim = ihm_station;
-	msg_sup.sec = utr_addr;
+/*********************************************************************************************************/
+int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, float * values, unsigned char * states, int list_size)
+{
+	t_msgsupsq_analog msg_sup;
+	flutuante_seq float_value;
+	int i, offset;
 	
+	if(list_size > MAX_MSGS_SQ){
+		printf("wrong analog size list\n");
+		return -1;
+	}
+	memset(&msg_sup, 0, sizeof(t_msgsupsq_analog));
+	msg_sup.signature = 0x64646464;
+	msg_sup.numpoints = list_size;
+	msg_sup.prim = ihm_station;
+	msg_sup.tipo=13;
+	msg_sup.causa=20; //integrity
+	msg_sup.taminfo=sizeof(flutuante_seq);
+
+	offset=sizeof(flutuante_seq)+sizeof(int);
+	
+	for (i=0; i < list_size; i++){
+		float_value.qds = get_analog_state(states[i]);
+		float_value.fr=values[i];
+		memcpy(&(msg_sup.info[i*offset]),(char *) &npontos[i], sizeof(unsigned int));
+		memcpy(&(msg_sup.info[i*offset+sizeof(int)]),(char *) &float_value, sizeof(flutuante_seq));
+	}
+	i = SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq_analog), server_sock_addr);
+	return i;
+
+}
+/*********************************************************************************************************/
+static unsigned char get_digital_state(unsigned char state)
+{
+	unsigned char digital_state;
 	if(!(state&0x40) && (state&0x80)) 
 		digital_state=0x01;//off
 	else if((state&0x40) && !(state&0x80))
@@ -292,6 +332,21 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 	if(state&0x01){ 
 		digital_state=digital_state|0x08; //invalid timestamp
 	}
+	return digital_state;
+
+}
+/*********************************************************************************************************/
+int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+	t_msgsup msg_sup;
+	unsigned char digital_state;
+
+	memset(&msg_sup, 0, sizeof(t_msgsup));
+	msg_sup.signature = 0x53535353;
+	msg_sup.endereco = nponto;
+	msg_sup.prim = ihm_station;
+	msg_sup.sec = utr_addr;
+	
+	digital_state = get_digital_state(state);
 
 	//only send as report if timestamp is valid
 	if(!(state&0x01) && report){
@@ -318,10 +373,39 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 		digital_value_gi.iq = digital_state;
 		memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
 	}
-
 	
 	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }
+
+/*********************************************************************************************************/
+int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, unsigned char * states, int list_size)
+{
+	t_msgsupsq_digital msg_sup;
+	digital_seq digital_value_gi;
+	int i, offset;
+	
+	if(list_size > MAX_MSGS_SQ){
+		printf("wrong digital size list\n");
+		return -1;
+	}
+
+	memset(&msg_sup, 0, sizeof(t_msgsupsq_digital));
+	msg_sup.signature = 0x64646464;
+	msg_sup.numpoints = list_size;
+	msg_sup.prim = ihm_station;
+	msg_sup.tipo=1;
+	msg_sup.causa=20; //integrity
+	msg_sup.taminfo=sizeof(digital_seq);
+	offset=sizeof(digital_seq)+sizeof(int);
+	
+	for (i=0; i < list_size; i++){
+		digital_value_gi.iq = get_digital_state(states[i]);
+		memcpy(&(msg_sup.info[i*offset]),(char *) &npontos[i], sizeof(unsigned int));
+		memcpy(&(msg_sup.info[i*offset+sizeof(int)]),(char *) &digital_value_gi, sizeof(digital_seq));
+	}
+	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq_digital), server_sock_addr);
+}
+
 /*********************************************************************************************************/
 int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok){
 	t_msgsup msg_sup;
@@ -340,7 +424,6 @@ int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr
 	msg_sup.taminfo=sizeof(digital_seq);
 	digital_value_gi.iq = 1;
 	memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
-
 	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsup), server_sock_addr);
 }
 /*********************************************************************************************************/

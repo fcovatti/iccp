@@ -58,6 +58,18 @@ static int ihm_enabled=0;
 static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
 static struct timeval start, now;
+static unsigned int digital_gi_msgs;
+static unsigned int events_gi_msgs;
+static unsigned int analog_gi_msgs;
+static unsigned int digital_msgs;
+static unsigned int events_msgs;
+static unsigned int analog_msgs;
+
+//buffer npontos analogicos
+static unsigned int analog_npontos[MAX_MSGS_SQ];
+static float analog_values[MAX_MSGS_SQ];
+static unsigned char analog_states[MAX_MSGS_SQ];
+static unsigned int analog_buf_size;
 /*********************************************************************************************************/
 
 #ifdef DATA_LOG
@@ -68,44 +80,148 @@ static FILE * data_file_events = NULL;
 
 FILE * error_file = NULL;
 
-/***********************************Handle functions*****************************************************/
-static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp, char report);
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report);
+/*********************************************************************************************************/
+void handle_analog_integrity(int dataset, data_to_handle * handle)
+{
+	int i, offset, msg_queue =0;
+	unsigned int npontos[MAX_MSGS_SQ];
+	float values[MAX_MSGS_SQ];
+	unsigned char states[MAX_MSGS_SQ];
+	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
+	memset(values, 0, MAX_MSGS_SQ*sizeof(float));
+	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+
+	offset = dataset_conf[dataset].offset;
+
+	for(i=0;i<dataset_conf[dataset].size;i++){
+		if(!analog[offset+i].not_present){
+			analog[offset+i].f = handle[i].f;
+			analog[offset+i].state = handle[i].state;
+			analog[offset+i].num_of_msg_rcv++;
+			npontos[msg_queue] = analog[offset+i].nponto;
+			values[msg_queue]= handle[i].f;
+			states[msg_queue]= handle[i].state;
+			msg_queue++;
+			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+				if(ihm_enabled && ihm_socket_send > 0){
+					if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_SQ)< 0){
+						LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+					}else{
+						analog_gi_msgs++;
+					}
+					memset(npontos, 0, MAX_MSGS_SQ);
+					memset(values,  0, MAX_MSGS_SQ);
+					memset(states,  0, MAX_MSGS_SQ);
+				}
+				msg_queue=0;
+			}
+		}
+	}
+	//if dataset size is not exactly multiple of queues...send what is left
+	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
+		if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_SQ))< 0){
+			LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+		}else{
+			analog_gi_msgs++;
+		}
+	}
+}
 
 /*********************************************************************************************************/
+void handle_digital_integrity(int dataset, data_to_handle * handle){
+	int i, offset, msg_queue =0;
+	offset = dataset_conf[dataset].offset;
+	unsigned int npontos[MAX_MSGS_SQ];
+	unsigned char states[MAX_MSGS_SQ];
+	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
+	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+
+	for(i=0;i<dataset_conf[dataset].size;i++){
+		if(!digital[offset+i].not_present){
+			digital[offset+i].time_stamp = handle[i].time_stamp;
+			digital[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
+			if(!(handle[i].state&0x01)){
+				printf("nponto %d: ", digital[offset+i].nponto);
+				print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, digital[offset+i].state_on, digital[offset+i].state_off);
+			}
+			digital[offset+i].state = handle[i].state;
+			digital[offset+i].num_of_msg_rcv++;
+			npontos[msg_queue] = digital[offset+i].nponto;
+			states[msg_queue] = handle[i].state;
+			msg_queue++;
+			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+				if(ihm_enabled && ihm_socket_send > 0){
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_SQ)< 0){
+						LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 					
+					}else{
+						digital_gi_msgs++;
+					}
+					memset(npontos, 0, MAX_MSGS_SQ);
+					memset(states,  0, MAX_MSGS_SQ);
+				}
+				msg_queue=0;
+			}
+		}
+	}
+	//if dataset size is not exactly multiple of queues...send what is left
+	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
+		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_SQ))< 0){
+			LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+		}else{
+			digital_gi_msgs++;
+		}
+	}
+}
+
+/*********************************************************************************************************/
+void handle_events_integrity(int dataset, data_to_handle * handle){
+	int i, offset,  msg_queue =0;
+	offset = dataset_conf[dataset].offset;
+	unsigned int npontos[MAX_MSGS_SQ]={0};
+	unsigned char states[MAX_MSGS_SQ]={0};
+	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
+	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+	
+	for(i=0;i<dataset_conf[dataset].size;i++){
+		if(!events[offset+i].not_present){
+			events[offset+i].time_stamp = handle[i].time_stamp;
+			events[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
+			events[offset+i].state = handle[i].state;
+			if(!(handle[i].state&0x01)){
+				printf("nponto %d: ", events[offset+i].nponto);
+				print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events[offset+i].state_on, events[offset+i].state_off);
+			}
+			events[offset+i].num_of_msg_rcv++;
+			npontos[msg_queue] = events[offset+i].nponto;
+			states[msg_queue]= handle[i].state;
+			msg_queue++;
+			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+				if(ihm_enabled && ihm_socket_send > 0){
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_SQ)< 0){
+						LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+					}else{
+						events_gi_msgs++;
+					}
+					memset(npontos, 0, MAX_MSGS_SQ);
+					memset(states,  0, MAX_MSGS_SQ);
+				}
+				msg_queue=0;
+			}
+		}
+	}
+	//if dataset size is not exactly multiple of queues...send what is left
+	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
+		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_SQ))< 0){
+			LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ );
+		}else{
+			events_gi_msgs++;
+		}
+	}
+}
+
+/*********************************************************************************************************/
+
 void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
-	handle_analog_state(value,state,index,time_stamp,1);
-}
-
-void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-	handle_digital_state(state, index, time_stamp,time_stamp_extended,1);
-}
-
-void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-	handle_event_state(state, index, time_stamp,time_stamp_extended,1);
-}
-
-void handle_analog_integrity(float value, unsigned char state, unsigned int index,time_t time_stamp){
-#ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_analog_state(value,state,index,time_stamp,0);
-#endif
-}
-void handle_digital_integrity(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-#ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_digital_state(state, index, time_stamp,time_stamp_extended,0);
-#endif
-}
-
-void handle_event_integrity(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-#ifndef REPORTS_ONLY_DATA_DEBUG
-	handle_event_state(state, index, time_stamp,time_stamp_extended,0);
-#endif
-}
-
-/*********************************************************************************************************/
-
-static int handle_analog_state(float value, unsigned char state, unsigned int index,time_t time_stamp,char report){
 
 	if (analog != NULL && index >=0 && index < num_of_analog_ids) {
 
@@ -129,16 +245,30 @@ static int handle_analog_state(float value, unsigned char state, unsigned int in
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			if (send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, report) < 0){
-				LOG_MESSAGE( "Error sending nponto %d\n", analog[index].nponto);
+		
+			analog_states[analog_buf_size]=state;
+			analog_values[analog_buf_size]=value;
+			analog_npontos[analog_buf_size]=analog[index].nponto;
+			analog_buf_size++;
+			if(analog_buf_size==MAX_MSGS_SQ){
+				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_npontos, ihm_station, analog_values, analog_states, MAX_MSGS_SQ) <0){
+					LOG_MESSAGE( "Error sending analog buffer \n");
+				}else{
+					analog_msgs++;
+					analog_buf_size=0;
+				}
 			}
+			
+		/*	if (send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, 1) < 0){
+				LOG_MESSAGE( "Error sending nponto %d\n", analog[index].nponto);
+			}else{
+				analog_msgs++;
+			}*/
 		}
 	}
-	return 0;
 }
 /*********************************************************************************************************/
-
-static int handle_digital_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended,char report){
+void handle_digital_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
 
 	if (digital != NULL && index >=0 && index < num_of_digital_ids) {
 
@@ -158,7 +288,7 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		digital[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_DIGITAL_REPORTS	
-		if(!(state&0x01)&&report){
+		if(!(state&0x01)){
 			printf("%25s: ", digital[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 		}
@@ -169,17 +299,18 @@ static int handle_digital_state(unsigned char state, unsigned int index, time_t 
 		print_value(state,0, time_stamp, time_stamp_extended, digital[index].state_on, digital[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, report) < 0){
+			if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, digital[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 				LOG_MESSAGE( "Error sending nponto %d\n", digital[index].nponto);
+			}else{
+				digital_msgs++;
 			}
 		}
 	}
-	return 0;
 }
 
 /*********************************************************************************************************/
 
-static int handle_event_state(unsigned char state, unsigned int index, time_t time_stamp, unsigned short time_stamp_extended, char report){
+void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
 
 	if (events != NULL && index >=0 && index < num_of_event_ids) {
 
@@ -199,7 +330,7 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		events[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_EVENTS_REPORTS	
-		if(!(state&0x01)&&report){
+		if(!(state&0x01)){
 			printf("%25s: ", events[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 		}
@@ -210,12 +341,13 @@ static int handle_event_state(unsigned char state, unsigned int index, time_t ti
 		print_value(state,0, time_stamp, time_stamp_extended, events[index].state_on, events[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
-			if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended,report) < 0){
+			if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, events[index].utr_addr, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 				LOG_MESSAGE( "Error sending nponto %d\n", digital[index].nponto);
+			}else{
+				events_msgs++;
 			}
 		}
 	}
-	return 0;
 }
 
 /*********************************************************************************************************/
@@ -237,6 +369,8 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 	unsigned short time_stamp_extended =0;
 	unsigned char * ts_extended;
 	ts_extended = (char *) &time_stamp_extended;
+	data_to_handle handle[DATASET_MAX_SIZE]; 
+	memset(handle, 0, sizeof(data_to_handle)*DATASET_MAX_SIZE);
 
 	dataSet = MmsConnection_readNamedVariableListValues(con, &mmsError, IDICCP, ds_name, 0);
 	if (dataSet == NULL){
@@ -282,7 +416,9 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 						data_state = analog_value->value.bitString.buf[0];
 					}
 					time( &time_stamp);
-					handle_analog_integrity(analog_data, data_state,idx , time_stamp);
+					handle[i].state=data_state;
+					handle[i].f=analog_data;
+
 				}
 			} else if(dataset_conf[offset].type == DATASET_DIGITAL){
 				data_state = 0;
@@ -310,7 +446,10 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					}else {
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
-					handle_digital_integrity(data_state, idx, time_stamp, time_stamp_extended); 
+					handle[i].state=data_state;
+					handle[i].time_stamp=time_stamp;
+					handle[i].time_stamp_extended=time_stamp_extended;
+
 				}
 			} else if(dataset_conf[offset].type == DATASET_EVENTS){
 				data_state = 0;
@@ -339,12 +478,24 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 					}else {
 						data_state = dataSetElem->value.bitString.buf[0];
 					}
-					handle_event_integrity(data_state, idx, time_stamp,time_stamp_extended); 		
+					handle[i].state=data_state;
+					handle[i].time_stamp=time_stamp;
+					handle[i].time_stamp_extended=time_stamp_extended;
 				}
 			} else{
 				LOG_MESSAGE( "ERROR - unknown configuration type for dataset %d offset %d\n", offset, idx);
 				return -1;
 			}
+		}
+
+		if(dataset_conf[offset].type == DATASET_DIGITAL){
+			handle_digital_integrity(offset, handle);
+		} else if(dataset_conf[offset].type == DATASET_EVENTS){
+			handle_events_integrity(offset, handle);
+		} else if(dataset_conf[offset].type == DATASET_ANALOG){
+			handle_analog_integrity(offset, handle);
+		} else {
+			LOG_MESSAGE( "ERROR - wrong type of dataset %d on read \n", offset);
 		}
 	}
 	//after reading dataset flush files
@@ -449,6 +600,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	int offset_size = 0;
 	unsigned short time_stamp_extended =0;
 	unsigned char * ts_extended;
+	data_to_handle handle[DATASET_MAX_SIZE]; 
+	memset(handle, 0, sizeof(data_to_handle)*DATASET_MAX_SIZE);
+	
 	ts_extended = (char *)&time_stamp_extended;
 	time(&time_stamp);
 	if (value != NULL && attributes != NULL && attributesCount ==4 && parameter != NULL) {
@@ -517,6 +671,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							//RULE 0
 							//first byte is the rule
 							if(dataSetValue->value.octetString.buf[0] == 0) {
+								
+							
 								if(dataSetValue->value.octetString.size == 0) {
 									LOG_MESSAGE( "ERROR - empty octetString\n");
 									return;
@@ -526,13 +682,14 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								}
 
 								octet_offset = 1; 
-								index = dataset_conf[offset].offset; // config index
+								//index = dataset_conf[offset].offset; // config index
+								index = 0;
 								dataset_conf[offset].num_of_rcv_gi++;
 								printf("ds %d gi %d\n",  offset,dataset_conf[offset].num_of_rcv_gi);
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
-										if(!digital[index].not_present){//In order to not threat non existent objects
+										if(!digital[index+dataset_conf[offset].offset].not_present){//In order to not threat non existent objects
 											if( octet_offset+ RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size) {
 												time_data time_value;
 												time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
@@ -541,14 +698,16 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 												time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
 												ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
 												ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
-												handle_digital_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
+												handle[index].state=dataSetValue->value.octetString.buf[octet_offset+6];
+												handle[index].time_stamp=time_value.t;
+												handle[index].time_stamp_extended=time_stamp_extended;
 											} else {
 												LOG_MESSAGE( "ERROR - wrong digital report octet size %d, offset %d - data %d bytes - ds %d, idx %d \n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index );
 											}
 										}
 										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_EVENTS){
-										if(!events[index].not_present){ //In order to not threat non existent objects
+										if(!events[index+dataset_conf[offset].offset].not_present){ //In order to not threat non existent objects
 											if( octet_offset+RULE0_DIGITAL_REPORT_SIZE <= dataSetValue->value.octetString.size){
 												time_data time_value;
 												time_value.s[3] = dataSetValue->value.octetString.buf[octet_offset];
@@ -557,7 +716,10 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 												time_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
 												ts_extended[1]= dataSetValue->value.octetString.buf[octet_offset+4];
 												ts_extended[0]= dataSetValue->value.octetString.buf[octet_offset+5];
-												handle_event_integrity(dataSetValue->value.octetString.buf[octet_offset+6], index, time_value.t, time_stamp_extended);
+												handle[index].state=dataSetValue->value.octetString.buf[octet_offset+6];
+												handle[index].time_stamp=time_value.t;
+												handle[index].time_stamp_extended=time_stamp_extended;
+
 											} else {
 												LOG_MESSAGE( "ERROR - wrong event report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_DIGITAL_REPORT_SIZE, offset, index);
 											}
@@ -565,7 +727,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 										octet_offset = octet_offset + RULE0_DIGITAL_REPORT_SIZE;
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
 										offset_size=RULE0_ANALOG_REPORT_SIZE;
-										if(analog[index].not_present){
+										if(analog[index+dataset_conf[offset].offset].not_present){
 											if(octet_offset+2 <= dataSetValue->value.octetString.size){ 
 												if(dataSetValue->value.octetString.buf[octet_offset] == 0x53 && dataSetValue->value.octetString.buf[octet_offset+1] == 0xf3) {
 													if(octet_offset+6 <= dataSetValue->value.octetString.size){ 
@@ -583,7 +745,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 												data_value.s[2] = dataSetValue->value.octetString.buf[octet_offset+1];
 												data_value.s[1] = dataSetValue->value.octetString.buf[octet_offset+2];
 												data_value.s[0] = dataSetValue->value.octetString.buf[octet_offset+3];
-												handle_analog_integrity(data_value.f, dataSetValue->value.octetString.buf[octet_offset+4], index, time_stamp);
+												handle[index].state=dataSetValue->value.octetString.buf[octet_offset+4];
+												handle[index].f=data_value.f;
 											} else {
 												LOG_MESSAGE( "ERROR - wrong analog report octet size %d, offset %d - data %d bytes - ds %d, idx %d\n",dataSetValue->value.octetString.size, octet_offset, RULE0_ANALOG_REPORT_SIZE, offset, index);
 											}
@@ -595,6 +758,17 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									}
 									index++;
 								}
+								// After put data on a list, treat them
+								if(dataset_conf[offset].type == DATASET_DIGITAL){
+									handle_digital_integrity(offset, handle);
+								} else if(dataset_conf[offset].type == DATASET_EVENTS){
+									handle_events_integrity(offset, handle);
+								} else if(dataset_conf[offset].type == DATASET_ANALOG){
+									handle_analog_integrity(offset, handle);
+								} else {
+									LOG_MESSAGE( "ERROR - wrong type of dataset %d on rule 0 \n", offset);
+								}
+
 							}else if(dataSetValue->value.octetString.buf[0] == 1) {
 								//RULE 1 - not implemented
 								LOG_MESSAGE( "WARNING - Information Report with rule 1 received\n");
@@ -739,90 +913,96 @@ static int read_configuration() {
 
 	file = fopen(ICCP_CLIENT_CONFIG_FILE, "r");
 	if(file==NULL){
-		LOG_MESSAGE( "ERROR -  cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
-		return -1;
-	} else{
-		while ( fgets(line, 300, file)){
-			if (line[0] == '/' && line[1]=='/')
-				continue;
-			if(sscanf(line, "%[^=]=\"%[^\";]; ",config_param, config_value) < 1)
-				break;
-			if(strcmp(config_param, "IDICCP") == 0){
-				snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", config_value);
-				LOG_MESSAGE("IDICCP=%s\n", IDICCP);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_1") == 0){
-				snprintf(srv1, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_1=%s\n", srv1);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_2") == 0){
-				snprintf(srv2, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_2=%s\n", srv2);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_3") == 0){
-				snprintf(srv3, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_3=%s\n", srv3);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_4") == 0){
-				snprintf(srv4, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_4=%s\n", srv4);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_5") == 0){
-				snprintf(srv5, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_5=%s\n", srv5);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_6") == 0){
-				snprintf(srv6, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_6=%s\n", srv6);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_7") == 0){
-				snprintf(srv7, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_7=%s\n", srv7);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "SERVER_NAME_8") == 0){
-				snprintf(srv8, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("SERVER_NAME_8=%s\n", srv8);
-				cfg_params++;
-			}
+		LOG_MESSAGE( "WARN -  cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
+		char cfg_file2[MAX_STR_NAME]; 
+		snprintf(cfg_file2, MAX_STR_NAME, "..\\conf\\%s", ICCP_CLIENT_CONFIG_FILE);
+		file = fopen(cfg_file2, "r");
+		if (file==NULL){
+			LOG_MESSAGE( "ERROR -  cannot open configuration file %s\n", cfg_file2);
+			return -1;
+		}
+	}
+	
+	while ( fgets(line, 300, file)){
+		if (line[0] == '/' && line[1]=='/')
+			continue;
+		if(sscanf(line, "%[^=]=\"%[^\";]; ",config_param, config_value) < 1)
+			break;
+		if(strcmp(config_param, "IDICCP") == 0){
+			snprintf(IDICCP, MAX_ID_ICCP_NAME, "%s", config_value);
+			LOG_MESSAGE("IDICCP=%s\n", IDICCP);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_1") == 0){
+			snprintf(srv1, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_1=%s\n", srv1);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_2") == 0){
+			snprintf(srv2, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_2=%s\n", srv2);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_3") == 0){
+			snprintf(srv3, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_3=%s\n", srv3);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_4") == 0){
+			snprintf(srv4, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_4=%s\n", srv4);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_5") == 0){
+			snprintf(srv5, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_5=%s\n", srv5);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_6") == 0){
+			snprintf(srv6, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_6=%s\n", srv6);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_7") == 0){
+			snprintf(srv7, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_7=%s\n", srv7);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "SERVER_NAME_8") == 0){
+			snprintf(srv8, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("SERVER_NAME_8=%s\n", srv8);
+			cfg_params++;
+		}
 
-			if(strcmp(config_param, "IHM_ADDRESS") == 0){
-				snprintf(ihm_addr, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("IHM_ADDRESS=%s\n", ihm_addr);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "CONFIG_FILE") == 0){
-				snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
-				LOG_MESSAGE("CONFIG_FILE=%s\n", cfg_file);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_INTEGRITY_TIME") == 0){
-				integrity_time = atoi(config_value);
-				LOG_MESSAGE("DATASET_INTEGRITY_TIME=%d\n", integrity_time);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_ANALOG_BUFFER_INTERVAL") == 0){
-				analog_buf = atoi(config_value);
-				LOG_MESSAGE("DATASET_ANALOG_BUFFER_INTERVAL=%d\n", analog_buf);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_DIGITAL_BUFFER_INTERVAL") == 0){
-				digital_buf = atoi(config_value);
-				LOG_MESSAGE("DATASET_DIGITAL_BUFFER_INTERVAL=%d\n", digital_buf);
-				cfg_params++;
-			}
-			if(strcmp(config_param, "DATASET_EVENTS_BUFFER_INTERVAL") == 0){
-				events_buf = atoi(config_value);
-				LOG_MESSAGE("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
-				cfg_params++;
-			}
+		if(strcmp(config_param, "IHM_ADDRESS") == 0){
+			snprintf(ihm_addr, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("IHM_ADDRESS=%s\n", ihm_addr);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "CONFIG_FILE") == 0){
+			snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("CONFIG_FILE=%s\n", cfg_file);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "DATASET_INTEGRITY_TIME") == 0){
+			integrity_time = atoi(config_value);
+			LOG_MESSAGE("DATASET_INTEGRITY_TIME=%d\n", integrity_time);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "DATASET_ANALOG_BUFFER_INTERVAL") == 0){
+			analog_buf = atoi(config_value);
+			LOG_MESSAGE("DATASET_ANALOG_BUFFER_INTERVAL=%d\n", analog_buf);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "DATASET_DIGITAL_BUFFER_INTERVAL") == 0){
+			digital_buf = atoi(config_value);
+			LOG_MESSAGE("DATASET_DIGITAL_BUFFER_INTERVAL=%d\n", digital_buf);
+			cfg_params++;
+		}
+		if(strcmp(config_param, "DATASET_EVENTS_BUFFER_INTERVAL") == 0){
+			events_buf = atoi(config_value);
+			LOG_MESSAGE("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
+			cfg_params++;
 		}
 	}
 
@@ -842,114 +1022,125 @@ static int read_configuration() {
 
 	file = fopen(cfg_file, "r");
 	if(file==NULL){
-		LOG_MESSAGE( "ERROR - cannot open configuration file %s\n", cfg_file);
+		LOG_MESSAGE( "WARN - cannot open configuration file %s\n", cfg_file);
+		char cfg_file2[MAX_STR_NAME]; 
+		snprintf(cfg_file2, MAX_STR_NAME, "..\\conf\\%s", cfg_file);
+		file = fopen(cfg_file2, "r");
+		if (file==NULL){
+			LOG_MESSAGE( "WARN - cannot open configuration file %s\n", cfg_file2);
+			snprintf(cfg_file2, MAX_STR_NAME, "..\\conf\\point_list.txt");
+			file = fopen(cfg_file2, "r");
+			if (file==NULL){
+				LOG_MESSAGE( "ERROR - cannot open configuration file %s\n", cfg_file2);
+				return -1;
+			}
+		}
+	}
+	
+	//first two rows of CONFIG_FILE are the reader, discard them
+	if(!fgets(line, 300, file)){
+		LOG_MESSAGE( "ERROR - Error reading %s file header\n", cfg_file);
 		return -1;
-	} else{
-		//first two rows of CONFIG_FILE are the reader, discard them
-		if(!fgets(line, 300, file)){
-			LOG_MESSAGE( "ERROR - Error reading %s file header\n", cfg_file);
+	}else {
+		if(sscanf(line, "%*s %*d %*s %d", &ihm_station) <1){
+			LOG_MESSAGE( "ERROR - cannot get ihm station from header\n");
 			return -1;
 		}else {
-			if(sscanf(line, "%*s %*d %*s %d", &ihm_station) <1){
-				LOG_MESSAGE( "ERROR - cannot get ihm station from header\n");
-				return -1;
-			}else {
-				LOG_MESSAGE("IHM station %d\n", ihm_station);
+			LOG_MESSAGE("IHM station %d\n", ihm_station);
+		}
+	}
+
+	if(!fgets(line, 300, file)){
+		LOG_MESSAGE( "ERROR - Error reading %s file header second line\n", cfg_file);
+		return -1;
+	}
+
+	while ( fgets(line, 300, file)){
+		//if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
+		if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %d %*d %*f %*f %d %d", &nponto,  id_ponto, &type, state_name, &origin, &utr_addr, &nponto_monitored, &event ) <1)
+			break;
+
+		//change - for $
+		for ( i=0; i <22; i++) {
+			if (id_ponto[i] == '-' || id_ponto[i] == '+'){
+				id_ponto[i] = '$';
 			}
 		}
-
-		if(!fgets(line, 300, file)){
-			LOG_MESSAGE( "ERROR - Error reading %s file header second line\n", cfg_file);
-			return -1;
-		}
-
-		while ( fgets(line, 300, file)){
-			//if(sscanf(line, "%d %*d %22s %c", &configuration[num_of_ids].nponto,  configuration[num_of_ids].id, &configuration[num_of_ids].type ) <1)
-			if(sscanf(line, "%d %*d %22s %c %31s %*d %*d %*d %d %*c %d %*d %*f %*f %d %d", &nponto,  id_ponto, &type, state_name, &origin, &utr_addr, &nponto_monitored, &event ) <1)
-				break;
-
-			//change - for $
-			for ( i=0; i <22; i++) {
-				if (id_ponto[i] == '-' || id_ponto[i] == '+'){
-					id_ponto[i] = '$';
-				}
-			}
 	
-			//Command Digital or Analog
-			if((type == 'D'||type=='A') && origin ==7 ){
-				//add $C to the end of command
-				if (id_ponto[21] == 'K') {
-					id_ponto[22] = '$';
-					id_ponto[23] = 'C';
-				}
-				memcpy(commands[num_of_commands].id,id_ponto,25);
-				commands[num_of_commands].nponto = nponto;
-				commands[num_of_commands].monitored = nponto_monitored;
-				if(type=='D')
-					commands[num_of_commands].type = DATASET_COMMAND_DIGITAL;
-				else
-					commands[num_of_commands].type = DATASET_COMMAND_ANALOG;
-
-				commands[num_of_commands].utr_addr = utr_addr;
-				num_of_commands++;
-			}//Events
-			else if(type == 'D' && event == 3){
-				memcpy(events[num_of_event_ids].id,id_ponto,25);
-				events[num_of_event_ids].nponto = nponto;
-				events[num_of_event_ids].utr_addr = utr_addr;
-				
-				state_split=0;
-				for ( i=0; i <MAX_STR_NAME; i++) {
-					if (state_name[i] == '/' ){
-						state_split=i;
-						events[num_of_event_ids].state_on[i]=0;
-						continue;
-					}
-					if(state_split){
-						if (state_name[i] == 0 ) {
-							events[num_of_event_ids].state_off[i-state_split-1]=0;
-							break;
-						}else
-							events[num_of_event_ids].state_off[i-state_split-1] = state_name[i];
-
-					}else
-						events[num_of_event_ids].state_on[i]=state_name[i];
-				}
-				num_of_event_ids++;
-			} //Digital
-			else if(type == 'D'){
-				memcpy(digital[num_of_digital_ids].id,id_ponto,25);
-				digital[num_of_digital_ids].nponto = nponto;
-				digital[num_of_digital_ids].utr_addr = utr_addr;
-				
-				state_split=0;
-				for ( i=0; i <MAX_STR_NAME; i++) {
-					if (state_name[i] == '/' ){
-						state_split=i;
-						digital[num_of_digital_ids].state_on[i]=0;
-						continue;
-					}
-					if(state_split){
-						if (state_name[i] == 0 ) {
-							digital[num_of_digital_ids].state_off[i-state_split-1] =0;
-							break;
-						}else
-							digital[num_of_digital_ids].state_off[i-state_split-1] = state_name[i];
-					}else
-						digital[num_of_digital_ids].state_on[i]=state_name[i];
-				}
-				num_of_digital_ids++;
-			} //Analog
-			else if(type == 'A'){
-				memcpy(analog[num_of_analog_ids].id,id_ponto,25);
-				analog[num_of_analog_ids].nponto = nponto;
-				analog[num_of_analog_ids].utr_addr = utr_addr;
-				memcpy(analog[num_of_analog_ids].state_on,state_name,  16);
-				num_of_analog_ids++;
-			} //Unknown 
-			else {
-				LOG_MESSAGE("WARNING - ERROR reading configuration file! Unknown type");
+		//Command Digital or Analog
+		if((type == 'D'||type=='A') && origin ==7 ){
+			//add $C to the end of command
+			if (id_ponto[21] == 'K') {
+				id_ponto[22] = '$';
+				id_ponto[23] = 'C';
 			}
+			memcpy(commands[num_of_commands].id,id_ponto,25);
+			commands[num_of_commands].nponto = nponto;
+			commands[num_of_commands].monitored = nponto_monitored;
+			if(type=='D')
+				commands[num_of_commands].type = DATASET_COMMAND_DIGITAL;
+			else
+				commands[num_of_commands].type = DATASET_COMMAND_ANALOG;
+
+			commands[num_of_commands].utr_addr = utr_addr;
+			num_of_commands++;
+		}//Events
+		else if(type == 'D' && event == 3){
+			memcpy(events[num_of_event_ids].id,id_ponto,25);
+			events[num_of_event_ids].nponto = nponto;
+			events[num_of_event_ids].utr_addr = utr_addr;
+			
+			state_split=0;
+			for ( i=0; i <MAX_STR_NAME; i++) {
+				if (state_name[i] == '/' ){
+					state_split=i;
+					events[num_of_event_ids].state_on[i]=0;
+					continue;
+				}
+				if(state_split){
+					if (state_name[i] == 0 ) {
+						events[num_of_event_ids].state_off[i-state_split-1]=0;
+						break;
+					}else
+						events[num_of_event_ids].state_off[i-state_split-1] = state_name[i];
+
+				}else
+					events[num_of_event_ids].state_on[i]=state_name[i];
+			}
+			num_of_event_ids++;
+		} //Digital
+		else if(type == 'D'){
+			memcpy(digital[num_of_digital_ids].id,id_ponto,25);
+			digital[num_of_digital_ids].nponto = nponto;
+			digital[num_of_digital_ids].utr_addr = utr_addr;
+			
+			state_split=0;
+			for ( i=0; i <MAX_STR_NAME; i++) {
+				if (state_name[i] == '/' ){
+					state_split=i;
+					digital[num_of_digital_ids].state_on[i]=0;
+					continue;
+				}
+				if(state_split){
+					if (state_name[i] == 0 ) {
+						digital[num_of_digital_ids].state_off[i-state_split-1] =0;
+						break;
+					}else
+						digital[num_of_digital_ids].state_off[i-state_split-1] = state_name[i];
+				}else
+					digital[num_of_digital_ids].state_on[i]=state_name[i];
+			}
+			num_of_digital_ids++;
+		} //Analog
+		else if(type == 'A'){
+			memcpy(analog[num_of_analog_ids].id,id_ponto,25);
+			analog[num_of_analog_ids].nponto = nponto;
+			analog[num_of_analog_ids].utr_addr = utr_addr;
+			memcpy(analog[num_of_analog_ids].state_on,state_name,  16);
+			num_of_analog_ids++;
+		} //Unknown 
+		else {
+			LOG_MESSAGE("WARNING - ERROR reading configuration file! Unknown type");
 		}
 	}
 
@@ -1034,6 +1225,11 @@ static void cleanup_variables(MmsConnection con)
 		LOG_MESSAGE( "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, events[i].nponto, events[i].num_of_msg_rcv, events[i].id);
 	}
 
+	LOG_MESSAGE("Total Sent %d - AGI:%d DGI:%d EGI:%d A:%d D:%d E:%d\n", (analog_gi_msgs+digital_gi_msgs+events_gi_msgs+analog_msgs+digital_msgs+events_msgs),
+				analog_gi_msgs, digital_gi_msgs, events_gi_msgs,analog_msgs, digital_msgs,events_msgs);
+
+	printf("Total Sent %d - AGI:%d DGI:%d EGI:%d A:%d D:%d E:%d\n", (analog_gi_msgs+digital_gi_msgs+events_gi_msgs+analog_msgs+digital_msgs+events_msgs),
+				analog_gi_msgs, digital_gi_msgs, events_gi_msgs,analog_msgs, digital_msgs,events_msgs);
 #ifdef DATA_LOG
 	fclose(data_file_analog);
 	fclose(data_file_digital);
@@ -1292,6 +1488,8 @@ int main (int argc, char ** argv){
 	
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {
+		printf("Total Sent %d - AGI:%d DGI:%d EGI:%d A:%d D:%d E:%d\n", (analog_gi_msgs+digital_gi_msgs+events_gi_msgs+analog_msgs+digital_msgs+events_msgs),
+				analog_gi_msgs, digital_gi_msgs, events_gi_msgs,analog_msgs, digital_msgs,events_msgs);
 		if(ihm_enabled)
 			check_commands(con);
 		else

@@ -23,6 +23,30 @@ typedef struct {
 	//unsigned char info[255]; // dado no formato padrão iec104
 } t_msgsup;
 
+//---------------------------------------------------------------------------
+typedef struct {
+	unsigned int signature;  // 0x64646464, valor fixo
+	unsigned int numpoints; // numero de pontos a serem enviados
+	unsigned int tipo; // código do tipo IEC, pode ser somente o tipo 	digital simples com ou sem  tag e o 13 para analógicos
+	unsigned int prim; // endereço da estação primária, pode colocar zero
+	unsigned int sec; // originator address (pode colocar zero)
+	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
+	unsigned int taminfo; // tamanho dos dados em info
+	unsigned char info[900]; // dado no formato padrão iec104
+} t_msgsupsq_analog;
+
+typedef struct {
+	unsigned int signature;  // 0x64646464, valor fixo
+	unsigned int numpoints; // numero de pontos a serem enviados
+	unsigned int tipo; // código do tipo IEC, pode ser somente o tipo 	digital simples com ou sem  tag e o 13 para analógicos
+	unsigned int prim; // endereço da estação primária, pode colocar zero
+	unsigned int sec; // originator address (pode colocar zero)
+	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
+	unsigned int taminfo; // tamanho dos dados em info
+	unsigned char info[500]; // dado no formato padrão iec104
+} t_msgsupsq_digital;
+
+
 //Em "info" colocar os dados para valor ponto flutuante ou digital
 
 // para o tipo 1 é somente 1 byte
@@ -43,7 +67,7 @@ typedef struct { // tipo 30
 typedef struct { // tipo 13
 	float fr;              // valor em ponto flutuante
 	unsigned char qds;     // qualificador do ponto no formato iec104
-} flutuante_seq;
+}  __attribute__((packed)) flutuante_seq;
 
 //Para comando é mais fácil ainda, vai a mensagem no sentido inverso
 //(escuta na 8098) no formato.
@@ -63,6 +87,8 @@ typedef struct
 #define PORT_IHM_TRANSMIT  	8099
 #define PORT_IHM_LISTEN   	8098
 
+#define MAX_MSGS_SQ			100
+
 int prepare_Wait(char * addr, int port);
 
 void * WaitT(unsigned int socketfd, int timeout_ms);
@@ -73,7 +99,11 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 
 int send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
+int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, unsigned char * states, int list_size);
+
 int send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report);
+
+int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, float * values, unsigned char * states, int list_size);
 
 int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok);
 

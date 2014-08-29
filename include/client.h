@@ -82,6 +82,14 @@ typedef struct {
 } data_config;
 
 typedef struct {
+	float f;
+	unsigned char state;
+	time_t time_stamp;
+	unsigned short time_stamp_extended;
+} data_to_handle;
+
+
+typedef struct {
 	unsigned int nponto;
 	char id[25];
 	char type;

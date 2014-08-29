@@ -12,8 +12,8 @@ SERVER_NAME_7="ems3";
 SERVER_NAME_8="ems3";
 
 //Name or IP of the IHM (if no IHM configured use "no")
-//IHM_ADDRESS="10.63.77.174";
-IHM_ADDRESS="no";
+IHM_ADDRESS="10.63.77.174";
+//IHM_ADDRESS="no";
 
 // Name of the configuration file
 CONFIG_FILE="sage_id.txt";
