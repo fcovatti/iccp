@@ -32,25 +32,24 @@ static int num_of_analog_ids = 0;
 static int num_of_digital_ids = 0;	
 static int num_of_event_ids = 0;	
 static int num_of_commands = 0;	
-
 static int num_of_datasets = 0;
 static int num_of_analog_datasets = 0;
 static int num_of_digital_datasets = 0;
 static int num_of_event_datasets = 0;
-
 static data_config * analog = NULL;
 static data_config * digital = NULL;
 static data_config * events = NULL;
 static command_config * commands = NULL;
-
 static dataset_config * dataset_conf = NULL;
 
-static char IDICCP[MAX_ID_ICCP_NAME];
 
+//Configuration from file
+static char IDICCP[MAX_ID_ICCP_NAME];
 static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
 static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
 static int integrity_time=0, analog_buf=0, digital_buf=0, events_buf=0;
 
+//IHM vars
 static char ihm_addr[MAX_STR_NAME];
 static int ihm_socket_send=0;
 static int ihm_socket_receive=0;
@@ -59,6 +58,7 @@ static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
 static struct timeval start, curr_time;
 
+//Counters
 static unsigned int digital_gi_msgs;
 static unsigned int events_gi_msgs;
 static unsigned int analog_gi_msgs;
@@ -66,6 +66,7 @@ static unsigned int digital_msgs;
 static unsigned int events_msgs;
 static unsigned int analog_msgs;
 
+//Analog buffer
 static st_analog_queue analog_queue;
 
 /*********************************************************************************************************/
@@ -221,9 +222,7 @@ void handle_events_integrity(int dataset, data_to_handle * handle){
 		}
 	}
 }
-
 /*********************************************************************************************************/
-
 void handle_analog_report(float value, unsigned char state, unsigned int index,time_t time_stamp){
 
 	if (analog != NULL && index >=0 && index < num_of_analog_ids) {
@@ -315,9 +314,7 @@ void handle_digital_report(unsigned char state, unsigned int index,time_t time_s
 		}
 	}
 }
-
 /*********************************************************************************************************/
-
 void handle_event_report(unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
 
 	if (events != NULL && index >=0 && index < num_of_event_ids) {
@@ -357,9 +354,7 @@ void handle_event_report(unsigned char state, unsigned int index,time_t time_sta
 		}
 	}
 }
-
 /*********************************************************************************************************/
-
 static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 	MmsValue* dataSet;
 	MmsError mmsError;
@@ -524,9 +519,7 @@ static int read_dataset(MmsConnection con, char * ds_name, unsigned int offset){
 	MmsValue_delete(dataSet); 
 	return 0;
 }
-
 /*********************************************************************************************************/
-
 static void create_dataset(MmsConnection con, char * ds_name, int offset)
 {
 	MmsError mmsError;
@@ -592,9 +585,7 @@ static void create_dataset(MmsConnection con, char * ds_name, int offset)
 
 	LinkedList_destroy(variables);
 }
-
 /*********************************************************************************************************/
-
 static void
 informationReportHandler (void* parameter, char* domainName, char* variableListName, MmsValue* value, LinkedList attributes, int attributesCount)
 {
@@ -679,7 +670,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							//RULE 0
 							//first byte is the rule
 							if(dataSetValue->value.octetString.buf[0] == 0) {
-								
 							
 								if(dataSetValue->value.octetString.size == 0) {
 									LOG_MESSAGE( "ERROR - empty octetString\n");
@@ -878,9 +868,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 		LOG_MESSAGE( "ERROR - wrong report %d %d %d %d\n",value != NULL, attributes != NULL , attributesCount , parameter != NULL);
 	}
 }
-
 /*********************************************************************************************************/
-
 static int read_configuration() {
 	FILE * file = NULL;
 	char line[300];
@@ -907,7 +895,13 @@ static int read_configuration() {
 	// OPEN ERROR LOG
 	time_t t = time(NULL);
 	struct tm now = *localtime(&t); 
-	snprintf(error_log,MAX_STR_NAME, "iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+
+#ifdef WIN32
+	snprintf(error_log,MAX_STR_NAME, "..\\conf\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#else
+	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#endif
+
 	error_file = fopen(error_log, "w");
 	if(error_file==NULL){
 		printf("Error, cannot open error log file %s\n",error_log);
@@ -918,10 +912,10 @@ static int read_configuration() {
 	/*****************
 	 * READ ICCP CONFIGURATION PARAMETERS
 	 **********/
-
 	file = fopen(ICCP_CLIENT_CONFIG_FILE, "r");
 	if(file==NULL){
 		LOG_MESSAGE( "WARN -  cannot open configuration file %s\n", ICCP_CLIENT_CONFIG_FILE);
+#ifdef WIN32
 		char cfg_file2[MAX_STR_NAME]; 
 		snprintf(cfg_file2, MAX_STR_NAME, "..\\conf\\%s", ICCP_CLIENT_CONFIG_FILE);
 		file = fopen(cfg_file2, "r");
@@ -929,6 +923,9 @@ static int read_configuration() {
 			LOG_MESSAGE( "ERROR -  cannot open configuration file %s\n", cfg_file2);
 			return -1;
 		}
+#else
+		return -1;
+#endif
 	}
 	
 	while ( fgets(line, 300, file)){
@@ -1031,6 +1028,7 @@ static int read_configuration() {
 	file = fopen(cfg_file, "r");
 	if(file==NULL){
 		LOG_MESSAGE( "WARN - cannot open configuration file %s\n", cfg_file);
+#ifdef WIN32
 		char cfg_file2[MAX_STR_NAME]; 
 		snprintf(cfg_file2, MAX_STR_NAME, "..\\conf\\%s", cfg_file);
 		file = fopen(cfg_file2, "r");
@@ -1043,6 +1041,9 @@ static int read_configuration() {
 				return -1;
 			}
 		}
+#else
+		return -1;
+#endif
 	}
 	
 	//first two rows of CONFIG_FILE are the reader, discard them
@@ -1200,16 +1201,12 @@ static int read_configuration() {
 	fclose(file);
 	return 0;
 }
-
 /*********************************************************************************************************/
-
 static void sigint_handler(int signalId)
 {
 	running = 0;
 }
-
 /*********************************************************************************************************/
-
 static void cleanup_variables(MmsConnection con)
 {
 	int i;
@@ -1256,7 +1253,6 @@ static void cleanup_variables(MmsConnection con)
 }
 
 /*********************************************************************************************************/
-
 #ifdef DATA_LOG
 static int open_data_logs(void) {
 	data_file_analog = fopen(DATA_ANALOG_LOG, "w");
@@ -1278,9 +1274,7 @@ static int open_data_logs(void) {
 
 }
 #endif
-
 /*********************************************************************************************************/
-
 //(TODO: add connection handler)
 static int connect_to_iccp_server(MmsConnection * con){
 	if ((connect_to_server(*con, srv1) < 0)){
@@ -1316,9 +1310,7 @@ static int connect_to_iccp_server(MmsConnection * con){
 	}
 	return 0;
 }
-
 /*********************************************************************************************************/
-
 static int create_ihm_comm(){
 	ihm_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
 	if(ihm_socket_send < 0){
@@ -1336,7 +1328,6 @@ static int create_ihm_comm(){
 	printf("Created UDP local socket for IHM Port %d\n",PORT_IHM_LISTEN);
 	return 0;
 }
-
 /*********************************************************************************************************/
 static void check_commands(MmsConnection con){
 	char * msg_rcv;
@@ -1380,9 +1371,7 @@ static void check_commands(MmsConnection con){
 		}
 	}
 }
-
 /*********************************************************************************************************/
-
 int main (int argc, char ** argv){
 	unsigned int i = 0;
 	MmsError mmsError;

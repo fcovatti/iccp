@@ -2,7 +2,7 @@
 IDICCP="HIS";
 
 // Name or IP of the remote iccp servers (tries to connect in ascending order)
-SERVER_NAME_1="10.63.5.43";
+SERVER_NAME_1="10.63.5.41";
 SERVER_NAME_2="lab-ems1";
 SERVER_NAME_3="ems3";
 SERVER_NAME_4="ems3";
