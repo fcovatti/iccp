@@ -21,7 +21,7 @@ typedef struct {
 	unsigned int taminfo; // tamanho dos dados em info
 	unsigned char info[10]; // dado no formato padrão iec104
 	//unsigned char info[255]; // dado no formato padrão iec104
-} t_msgsup;
+} __attribute__((packed)) t_msgsup;
 
 //---------------------------------------------------------------------------
 typedef struct {
@@ -33,7 +33,7 @@ typedef struct {
 	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
 	unsigned int taminfo; // tamanho dos dados em info
 	unsigned char info[900]; // dado no formato padrão iec104
-} t_msgsupsq_analog;
+} __attribute__((packed)) t_msgsupsq_analog;
 
 typedef struct {
 	unsigned int signature;  // 0x64646464, valor fixo
@@ -44,7 +44,7 @@ typedef struct {
 	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
 	unsigned int taminfo; // tamanho dos dados em info
 	unsigned char info[500]; // dado no formato padrão iec104
-} t_msgsupsq_digital;
+} __attribute__((packed)) t_msgsupsq_digital;
 
 
 //Em "info" colocar os dados para valor ponto flutuante ou digital
@@ -52,7 +52,7 @@ typedef struct {
 // para o tipo 1 é somente 1 byte
 typedef struct { // tipo 1
 	unsigned char iq;  // informaçao com qualificador no formato iec104
-} digital_seq;
+} __attribute__((packed)) digital_seq;
 
 typedef struct { // tipo 30
 	unsigned char iq;  // informaçao com qualificador no formato iec104
@@ -81,7 +81,7 @@ typedef struct
 	unsigned int sbo;
 	unsigned int qu;
 	unsigned int utr;
-} t_msgcmd;
+} __attribute__((packed)) t_msgcmd;
 
 //#define DEBUG_MSGS
 #define PORT_IHM_TRANSMIT  	8099

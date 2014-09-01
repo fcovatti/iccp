@@ -11,6 +11,8 @@
 #include <signal.h>
 #include "mms_client_connection.h"
 #include "client.h"
+#include "thread.h"
+#include "comm.h"
 
 #define ICCP_CLIENT_CONFIG_FILE "iccp_config.txt"
 
@@ -113,6 +115,15 @@ typedef struct {
 	unsigned int offset;
 	int num_of_rcv_gi;
 } dataset_config;
+
+typedef struct {
+	unsigned int npontos[MAX_MSGS_SQ];
+	float values[MAX_MSGS_SQ];
+	unsigned char states[MAX_MSGS_SQ];
+	unsigned int size;
+	unsigned int time;
+	Semaphore mutex;
+} st_analog_queue;
 
 typedef struct {
 	unsigned int nponto;

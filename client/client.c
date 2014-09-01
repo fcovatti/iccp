@@ -57,7 +57,8 @@ static int ihm_socket_receive=0;
 static int ihm_enabled=0;
 static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
-static struct timeval start, now;
+static struct timeval start, curr_time;
+
 static unsigned int digital_gi_msgs;
 static unsigned int events_gi_msgs;
 static unsigned int analog_gi_msgs;
@@ -65,11 +66,8 @@ static unsigned int digital_msgs;
 static unsigned int events_msgs;
 static unsigned int analog_msgs;
 
-//buffer npontos analogicos
-static unsigned int analog_npontos[MAX_MSGS_SQ];
-static float analog_values[MAX_MSGS_SQ];
-static unsigned char analog_states[MAX_MSGS_SQ];
-static unsigned int analog_buf_size;
+static st_analog_queue analog_queue;
+
 /*********************************************************************************************************/
 
 #ifdef DATA_LOG
@@ -80,6 +78,11 @@ static FILE * data_file_events = NULL;
 
 FILE * error_file = NULL;
 
+/*********************************************************************************************************/
+static int get_time_ms(){
+	gettimeofday(&curr_time, NULL);
+	return ((curr_time.tv_sec-start.tv_sec)*1000 + (curr_time.tv_usec-start.tv_usec)/1000);
+}
 /*********************************************************************************************************/
 void handle_analog_integrity(int dataset, data_to_handle * handle)
 {
@@ -244,20 +247,25 @@ void handle_analog_report(float value, unsigned char state, unsigned int index,t
 		printf("%25s: %11.2f %-6s |", analog[index].id, value,analog[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
+
+		//BUFFERING ANALOG DATA
 		if(ihm_enabled && ihm_socket_send > 0){
-		
-			analog_states[analog_buf_size]=state;
-			analog_values[analog_buf_size]=value;
-			analog_npontos[analog_buf_size]=analog[index].nponto;
-			analog_buf_size++;
-			if(analog_buf_size==MAX_MSGS_SQ){
-				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_npontos, ihm_station, analog_values, analog_states, MAX_MSGS_SQ) <0){
+			Semaphore_wait(analog_queue.mutex);	
+			if(!analog_queue.size)
+				analog_queue.time=get_time_ms();//first income packet store time of receive
+			analog_queue.states[analog_queue.size]=state;
+			analog_queue.values[analog_queue.size]=value;
+			analog_queue.npontos[analog_queue.size]=analog[index].nponto;
+			analog_queue.size++;
+			if(analog_queue.size==MAX_MSGS_SQ){//if queue is full, send to ihm
+				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ) <0){
 					LOG_MESSAGE( "Error sending analog buffer \n");
 				}else{
 					analog_msgs++;
-					analog_buf_size=0;
+					analog_queue.size=0;
 				}
 			}
+			Semaphore_post(analog_queue.mutex);	
 			
 		/*	if (send_analog_to_ihm(ihm_socket_send, &ihm_sock_addr, analog[index].nponto, analog[index].utr_addr,ihm_station, value, state, 1) < 0){
 				LOG_MESSAGE( "Error sending nponto %d\n", analog[index].nponto);
@@ -1381,6 +1389,7 @@ int main (int argc, char ** argv){
 	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
 	gettimeofday(&start, NULL);
+	analog_queue.mutex = Semaphore_create(1); //semaphore
 	// READ CONFIGURATION FILE
 	if (read_configuration() != 0) {
 		printf("Error reading configuration\n");
@@ -1494,7 +1503,18 @@ int main (int argc, char ** argv){
 			check_commands(con);
 		else
 			Thread_sleep(2000);
-		
+	
+		// EMPTY ANALOG BUFFER	
+		Semaphore_wait(analog_queue.mutex);	
+		if(analog_queue.size && ((get_time_ms()-analog_queue.time) > 4000)){//timeout to send analog buffered messages if not empty
+			if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
+				LOG_MESSAGE( "Error sending analog buffer \n");
+			}else{
+				analog_msgs++;
+				analog_queue.size=0;
+			}
+		}
+		Semaphore_post(analog_queue.mutex);	
 		if (check_connection(con,IDICCP) < 0)
 			break;
 	}
