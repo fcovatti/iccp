@@ -14,5 +14,6 @@ build/*
 bin/*
 client/iccp_client*
 inspector/inspector*
+ihm/ihm_test*
 .cproject
 .project

@@ -78,7 +78,6 @@ typedef struct {
 	unsigned char state;
 	time_t time_stamp;
 	unsigned short time_stamp_extended;
-	unsigned char utr_addr;
 	unsigned char not_present;
 	unsigned int num_of_msg_rcv;
 } data_config;
@@ -96,7 +95,6 @@ typedef struct {
 	char id[25];
 	char type;
 	unsigned int monitored;
-	unsigned char utr_addr;
 } command_config;
 
 typedef enum{
@@ -124,6 +122,15 @@ typedef struct {
 	unsigned int time;
 	Semaphore mutex;
 } st_analog_queue;
+
+typedef struct {
+	unsigned int npontos[MAX_MSGS_SQ];
+	unsigned char states[MAX_MSGS_SQ];
+	unsigned int size;
+	unsigned int time;
+	Semaphore mutex;
+} st_digital_queue;
+
 
 typedef struct {
 	unsigned int nponto;

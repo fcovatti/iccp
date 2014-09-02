@@ -14,6 +14,7 @@
 
 #ifdef WIN32
 
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdio.h>
@@ -42,7 +43,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 	  	return -1;
 	}
 
-	listen_socket = socket(AF_INET, SOCK_DGRAM,0);
+	listen_socket = socket(AF_INET, SOCK_DGRAM,IPPROTO_UDP);
 
 	if (listen_socket == INVALID_SOCKET) {
 		printf("socket failed with error: %i\n", WSAGetLastError());
@@ -87,7 +88,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 	int socketfd;
 
 	/*1) Create a UDP socket*/
-	if ( (socketfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
+	if ( (socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
 		fprintf(stderr, "Error creating udp socket. Aborting!\r\n");
 		return -1;
 	}
@@ -135,9 +136,10 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 #endif
 
 /*********************************************************************************************************/
-int prepare_Wait(int port)
+int prepare_Wait(char *addr, int port)
 {
 	int socketfd;
+	int keepalive=1;
 	struct sockaddr_in servSock;
 
 #ifdef WIN32
@@ -151,27 +153,36 @@ int prepare_Wait(int port)
 #endif
 
 	/*Create a UDP socket for incoming connections*/
-	if ( (socketfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
+	if ( (socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
 		printf("Error creating a udp socket port %d!\n", port);
 		return -1;
 	}
 
 	memset(&servSock, 0, sizeof(servSock));
-
 	servSock.sin_family = AF_INET;
 	servSock.sin_port = htons(port);
 	servSock.sin_addr.s_addr = htonl(INADDR_ANY);
 
+
+	setsockopt(socketfd,SOL_SOCKET, SO_KEEPALIVE,(char *) &keepalive, sizeof(keepalive));
+
 	/* 2) Assign a port to a socket(bind)*/
-	if ( bind(socketfd, (const struct sockaddr *)&servSock, sizeof(servSock) ) < 0) {
+	if (bind(socketfd, (const struct sockaddr *)&servSock, sizeof(servSock) ) < 0) {
 		close(socketfd);
 		fprintf(stderr, "Error on bind port %d.. %s\r\n", port, strerror(errno));
 #ifdef WIN32
-	WSACleanup();
+		WSACleanup();
 #endif
 		return -1;
 	}
 
+#ifdef WIN32
+	BOOL bNewBehavior = FALSE;
+	DWORD dwBytesReturned =0;
+	if(WSAIoctl(socketfd, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL) == SOCKET_ERROR){
+		printf("error set behavior socket win32\n");
+	}
+#endif
 	return socketfd;
 
 }
@@ -202,31 +213,21 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 
 		buf = malloc(2000);
 		n = recv(socketfd, buf, 2000, 0);
-#ifdef DEBUG_MSGS
-		printf("read %d bytes socketd %d\n", n, socketfd);
-#endif
 		if (n < 0) {
-			printf("ERROR reading from socket %d\n", socketfd);
+			printf("ERROR reading from socket %d %d\n", socketfd, n);
+#ifdef WIN32
+				printf("error %d\n", WSAGetLastError());
+#endif
 			free(buf);
 			return NULL;
 		}
 	}
+
 	return buf;
 }
 /*********************************************************************************************************/
 int prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr) 
 {
-
-#ifdef WIN32
-	int ec;
-	WSADATA wsa;
-
-	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
-		printf("winsock error: code %i\n");
-		return -1;
-	}
-#endif
-
 	memset((char *) server_addr , 0, sizeof(struct sockaddr_in));
 
 	if (address != NULL) {
@@ -245,10 +246,6 @@ int prepareServerAddress(char* address, int port, struct sockaddr_in * server_ad
 
     server_addr->sin_family = AF_INET;
     server_addr->sin_port = htons(port);
-
-#ifdef WIN32
-	WSACleanup();
-#endif
 
     return 0;
 }
@@ -269,15 +266,14 @@ static unsigned char get_analog_state(unsigned char state)
 	return analog_state;
 }
 /*********************************************************************************************************/
-int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report)
+int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char ihm_station, float value, unsigned char state, char report)
 {
 			t_msgsup msg_sup;
 			flutuante_seq float_value;
 			memset(&msg_sup, 0, sizeof(t_msgsup));
-			msg_sup.signature = 0x53535353;
+			msg_sup.signature = IHM_SINGLE_POINT_SIGN;
 			msg_sup.endereco = nponto;
 			msg_sup.prim = ihm_station;
-			msg_sup.sec = utr_addr;
 			msg_sup.tipo = 13;
 
 			if(report)
@@ -306,7 +302,7 @@ int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,
 		return -1;
 	}
 	memset(&msg_sup, 0, sizeof(t_msgsupsq_analog));
-	msg_sup.signature = 0x64646464;
+	msg_sup.signature = IHM_POINT_LIST_SIGN;
 	msg_sup.numpoints = list_size;
 	msg_sup.prim = ihm_station;
 	msg_sup.tipo=13;
@@ -353,15 +349,14 @@ static unsigned char get_digital_state(unsigned char state)
 
 }
 /*********************************************************************************************************/
-int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
 	memset(&msg_sup, 0, sizeof(t_msgsup));
-	msg_sup.signature = 0x53535353;
+	msg_sup.signature = IHM_SINGLE_POINT_SIGN;
 	msg_sup.endereco = nponto;
 	msg_sup.prim = ihm_station;
-	msg_sup.sec = utr_addr;
 	
 	digital_state = get_digital_state(state);
 
@@ -407,7 +402,7 @@ int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr
 	}
 
 	memset(&msg_sup, 0, sizeof(t_msgsupsq_digital));
-	msg_sup.signature = 0x64646464;
+	msg_sup.signature = IHM_POINT_LIST_SIGN;
 	msg_sup.numpoints = list_size;
 	msg_sup.prim = ihm_station;
 	msg_sup.tipo=1;
@@ -424,14 +419,13 @@ int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr
 }
 
 /*********************************************************************************************************/
-int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok){
+int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char ihm_station, char cmd_ok){
 	t_msgsup msg_sup;
 	digital_seq digital_value_gi;
 	memset(&msg_sup, 0, sizeof(t_msgsup));
-	msg_sup.signature = 0x53535353;
+	msg_sup.signature = IHM_SINGLE_POINT_SIGN;
 	msg_sup.endereco = nponto;
 	msg_sup.prim = ihm_station;
-	msg_sup.sec = utr_addr;
 	if (!cmd_ok){
 		msg_sup.causa=0x43; //command response not ok
 	}else{

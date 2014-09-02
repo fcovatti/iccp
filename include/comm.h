@@ -89,10 +89,12 @@ typedef struct
 
 #define PORT_ICCP_BACKUP   	8102
 #define	ICCP_BACKUP_SIGNATURE	0xA5A5A5A5
+#define	IHM_SINGLE_POINT_SIGN	0x53535353
+#define	IHM_POINT_LIST_SIGN		0x64646464
 
 #define MAX_MSGS_SQ			100
 
-int prepare_Wait(int port);
+int prepare_Wait(char * addr, int port);
 
 void * WaitT(unsigned int socketfd, int timeout_ms);
 
@@ -102,14 +104,14 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 
 int prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr); 
 
-int send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
+int send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
 int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, unsigned char * states, int list_size);
 
-int send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr, unsigned char ihm_station, float value, unsigned char state, char report);
+int send_analog_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto, unsigned char ihm_station, float value, unsigned char state, char report);
 
 int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, float * values, unsigned char * states, int list_size);
 
-int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char utr_addr, unsigned char ihm_station, char cmd_ok);
+int send_cmd_response_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char ihm_station, char cmd_ok);
 
 #endif
