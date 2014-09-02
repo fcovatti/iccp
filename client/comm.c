@@ -21,28 +21,6 @@
 #include <windows.h>
 
 
-/*********************************************************************************************************/
-static bool
-prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr) 
-{
-	memset((char *) server_addr , 0, sizeof(struct sockaddr_in));
-
-	if (address != NULL) {
-		struct hostent *server;
-		server = gethostbyname(address);
-
-		if (server == NULL) return false;
-
-		memcpy((char *) &(server_addr->sin_addr.s_addr), (char *) server->h_addr, server->h_length);
-	}
-	else
-		server_addr->sin_addr.s_addr = htonl(INADDR_ANY);
-
-    server_addr->sin_family = AF_INET;
-    server_addr->sin_port = htons(port);
-
-    return true;
-}
 
 /*********************************************************************************************************/
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
@@ -59,7 +37,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 		return -1;
 	}
 
-	if (!prepareServerAddress(addr, port, server_addr)){
+	if (prepareServerAddress(addr, port, server_addr) < 0){
 	  	printf("error preparing address\n");
 	  	return -1;
 	}
@@ -157,7 +135,7 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 #endif
 
 /*********************************************************************************************************/
-int prepare_Wait(char * addr, int port)
+int prepare_Wait(int port)
 {
 	int socketfd;
 	struct sockaddr_in servSock;
@@ -234,6 +212,45 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 		}
 	}
 	return buf;
+}
+/*********************************************************************************************************/
+int prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr) 
+{
+
+#ifdef WIN32
+	int ec;
+	WSADATA wsa;
+
+	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
+		printf("winsock error: code %i\n");
+		return -1;
+	}
+#endif
+
+	memset((char *) server_addr , 0, sizeof(struct sockaddr_in));
+
+	if (address != NULL) {
+		struct hostent *server;
+		server = gethostbyname(address);
+
+		if (server == NULL) {
+			printf("could not find server host by name %s\n", address);
+			return -1;
+		}
+
+		memcpy((char *) &(server_addr->sin_addr.s_addr), (char *) server->h_addr, server->h_length);
+	}
+	else
+		server_addr->sin_addr.s_addr = htonl(INADDR_ANY);
+
+    server_addr->sin_family = AF_INET;
+    server_addr->sin_port = htons(port);
+
+#ifdef WIN32
+	WSACleanup();
+#endif
+
+    return 0;
 }
 /*********************************************************************************************************/
 static unsigned char get_analog_state(unsigned char state)

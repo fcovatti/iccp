@@ -49,6 +49,12 @@ static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX
 static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
 static int integrity_time=0, analog_buf=0, digital_buf=0, events_buf=0;
 
+//Backup ICCP
+static char bkp_addr[MAX_STR_NAME];
+static int bkp_socket=0;
+static int bkp_enabled=0;
+static struct sockaddr_in bkp_sock_addr;
+
 //IHM vars
 static char ihm_addr[MAX_STR_NAME];
 static int ihm_socket_send=0;
@@ -897,7 +903,7 @@ static int read_configuration() {
 	struct tm now = *localtime(&t); 
 
 #ifdef WIN32
-	snprintf(error_log,MAX_STR_NAME, "..\\conf\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+	snprintf(error_log,MAX_STR_NAME, "..\\log\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
 #else
 	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
 #endif
@@ -984,6 +990,12 @@ static int read_configuration() {
 			LOG_MESSAGE("IHM_ADDRESS=%s\n", ihm_addr);
 			cfg_params++;
 		}
+
+		if(strcmp(config_param, "ICCP_BKP_ADDRESS") == 0){
+			snprintf(bkp_addr, MAX_STR_NAME, "%s", config_value);
+			LOG_MESSAGE("ICCP_BKP_ADDRESS=%s\n", bkp_addr);
+			cfg_params++;
+		}
 		if(strcmp(config_param, "CONFIG_FILE") == 0){
 			snprintf(cfg_file, MAX_STR_NAME, "%s", config_value);
 			LOG_MESSAGE("CONFIG_FILE=%s\n", cfg_file);
@@ -1011,7 +1023,7 @@ static int read_configuration() {
 		}
 	}
 
-	if (cfg_params!=15){
+	if (cfg_params!=16){
 		LOG_MESSAGE( "ERROR - wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		return -1;
 	}
@@ -1250,6 +1262,9 @@ static void cleanup_variables(MmsConnection con)
 		close(ihm_socket_send);
 		close(ihm_socket_receive);
 	}
+	if(bkp_enabled){
+		close(bkp_socket);
+	}
 }
 
 /*********************************************************************************************************/
@@ -1319,7 +1334,7 @@ static int create_ihm_comm(){
 	}	
 	printf("Created UDP socket for IHM %s Port %d\n",ihm_addr, PORT_IHM_TRANSMIT);
 
-	ihm_socket_receive = prepare_Wait(ihm_addr, PORT_IHM_LISTEN);
+	ihm_socket_receive = prepare_Wait(PORT_IHM_LISTEN);
 	if(ihm_socket_receive < 0){
 		printf("could not create UDP socket to listen to IHM\n");
 		close(ihm_socket_send);
@@ -1327,6 +1342,33 @@ static int create_ihm_comm(){
 	}
 	printf("Created UDP local socket for IHM Port %d\n",PORT_IHM_LISTEN);
 	return 0;
+}
+/*********************************************************************************************************/
+static int create_bkp_comm(){
+
+	if(prepareServerAddress(bkp_addr, PORT_ICCP_BACKUP, &bkp_sock_addr) < 0){
+	  	printf("error preparing ICCP backup address\n");
+	  	return -1;
+	}
+	bkp_socket = prepare_Wait(PORT_ICCP_BACKUP);
+	if(bkp_socket < 0){
+		printf("could not create UDP socket to listen to Backup ICCP Client\n");
+		return -1;
+	}
+	printf("Created UDP socket for ICCP Bakcup Port %d\n",PORT_ICCP_BACKUP);
+	return 0;
+}
+/*********************************************************************************************************/
+static int check_backup(int msg_timeout){
+	char * msg_rcv;
+	msg_rcv = WaitT(bkp_socket, msg_timeout);	
+	if(msg_rcv != NULL) {
+		unsigned int msg_code = 0;
+		memcpy(&msg_code, msg_rcv, sizeof(unsigned int));
+		if(msg_code == ICCP_BACKUP_SIGNATURE) 
+			return 0;		
+	}
+	return -1;
 }
 /*********************************************************************************************************/
 static void check_commands(MmsConnection con){
@@ -1352,8 +1394,6 @@ static void check_commands(MmsConnection con){
 			LOG_MESSAGE( "Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
 					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
 
-			//send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 1); //CMD ERROR
-			//send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 1); //CMD ERROR
 			if(command_variable(con, commands[i].id, cmd_recv.onoff)<0){
 				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, commands[i].utr_addr, ihm_station, 0); //CMD ERROR
 				LOG_MESSAGE("Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
@@ -1374,6 +1414,8 @@ static void check_commands(MmsConnection con){
 /*********************************************************************************************************/
 int main (int argc, char ** argv){
 	unsigned int i = 0;
+	unsigned int bkp_present;
+	unsigned int bkp_signature = ICCP_BACKUP_SIGNATURE;
 	MmsError mmsError;
 	signal(SIGINT, sigint_handler);
 	MmsConnection con = MmsConnection_create();
@@ -1396,6 +1438,42 @@ int main (int argc, char ** argv){
 		return -1;
 	}
 #endif
+
+	//CHECK IF BACKUP ICCP IS CONFIGURED
+	if(strcmp(bkp_addr,"no")==0) {
+		printf("no iccp client backup configured\n");
+		bkp_present=0;
+	}else{
+		bkp_enabled=1;
+		bkp_present=6+(rand()%10);//random time checks
+		if(create_bkp_comm() < 0){
+			printf("Error, cannot open communication to bkp server\n");
+			cleanup_variables(con);
+			return -1;
+		}
+	}
+
+	//Check if Backup ICCP client is running
+	Thread_sleep(rand()%1000); //random sleep
+	while (bkp_present && running){
+		if(check_backup(((rand()%750) + 750)) < 0){//random buffer timeout
+			bkp_present--;
+		}else{
+			bkp_present=10;
+		}
+	}
+
+	if(!running){
+		cleanup_variables(con);
+		return -1;
+	}
+
+	//Send Message to backup in order to mantain it disabled	
+	if (bkp_enabled && (SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
+		LOG_MESSAGE("Error sending message to backup server on initialization\n");
+		cleanup_variables(con);
+		return -1;
+	}
 
 	//INITIALIZE IHM CONNECTION 
 	if(strcmp(ihm_addr,"no")==0) {
@@ -1439,7 +1517,6 @@ int main (int argc, char ** argv){
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
 			MmsValue_delete(transfer_set_dig);
 		}
-		//Thread_sleep(50);//sleep 50ms for different report times (better handling)
 		printf(".");
 	}	
 	printf("\n");
@@ -1460,6 +1537,14 @@ int main (int argc, char ** argv){
 	printf("Write/Read data sets   ");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
+		
+		//Send Message to backup in order to mantain it disabled	
+		if (bkp_enabled && (SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
+			LOG_MESSAGE("Error sending message to backup server on initialization\n");
+			cleanup_variables(con);
+			return -1;
+		}
+
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, 0);
 			read_dataset(con, dataset_conf[i].id, i);
@@ -1488,6 +1573,13 @@ int main (int argc, char ** argv){
 	while(running) {
 		printf("Total Sent %d - AGI:%d DGI:%d EGI:%d A:%d D:%d E:%d\n", (analog_gi_msgs+digital_gi_msgs+events_gi_msgs+analog_msgs+digital_msgs+events_msgs),
 				analog_gi_msgs, digital_gi_msgs, events_gi_msgs,analog_msgs, digital_msgs,events_msgs);
+
+		//Send Message to backup in order to mantain it disabled	
+		if (bkp_enabled && (SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
+			LOG_MESSAGE("Error sending message to backup server\n");
+			break;
+		}
+
 		if(ihm_enabled)
 			check_commands(con);
 		else
@@ -1504,6 +1596,8 @@ int main (int argc, char ** argv){
 			}
 		}
 		Semaphore_post(analog_queue.mutex);	
+	
+	
 		if (check_connection(con,IDICCP) < 0)
 			break;
 	}

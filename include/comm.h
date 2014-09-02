@@ -87,15 +87,20 @@ typedef struct
 #define PORT_IHM_TRANSMIT  	8099
 #define PORT_IHM_LISTEN   	8098
 
+#define PORT_ICCP_BACKUP   	8102
+#define	ICCP_BACKUP_SIGNATURE	0xA5A5A5A5
+
 #define MAX_MSGS_SQ			100
 
-int prepare_Wait(char * addr, int port);
+int prepare_Wait(int port);
 
 void * WaitT(unsigned int socketfd, int timeout_ms);
 
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr);
 
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr);
+
+int prepareServerAddress(char* address, int port, struct sockaddr_in * server_addr); 
 
 int send_digital_to_ihm(int socketfd, struct sockaddr_in * serv_sock_addr,unsigned int nponto,unsigned char utr_addr,unsigned char ihm_station, unsigned char state, time_t time_stamp, unsigned short time_stamp_extended, char report);
 
