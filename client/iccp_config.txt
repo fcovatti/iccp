@@ -2,18 +2,18 @@
 IDICCP="HIS";
 
 // Name or IP of the remote iccp servers (tries to connect in ascending order)
-SERVER_NAME_1="10.63.5.41";
-SERVER_NAME_2="lab-ems1";
-SERVER_NAME_3="ems3";
-SERVER_NAME_4="ems3";
-SERVER_NAME_5="ems3";
-SERVER_NAME_6="lab-ems1";
-SERVER_NAME_7="ems3";
-SERVER_NAME_8="ems3";
+SERVER_NAME_1="10.63.5.43";
+SERVER_NAME_2="10.63.5.43";
+SERVER_NAME_3="10.63.5.43";
+SERVER_NAME_4="10.63.5.43";
+SERVER_NAME_5="10.63.77.174";
+SERVER_NAME_6="10.63.77.174";
+SERVER_NAME_7="10.63.77.174";
+SERVER_NAME_8="10.63.77.174";
 
 //Name or IP of the IHM (if no IHM configured use "no")
-//IHM_ADDRESS="10.63.77.174";
-IHM_ADDRESS="127.0.0.1";
+IHM_ADDRESS="10.63.77.174";
+//IHM_ADDRESS="127.0.0.1";
 //IHM_ADDRESS="no";
 
 //Name or IP of the Backup ICCP client (if no backup configured use "no")
