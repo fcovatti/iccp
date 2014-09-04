@@ -49,6 +49,8 @@
 // MAx number of commands allowed on the client(maximum number for sage is 20000)
 #define COMMANDS_MAX_NUMBER 20000
 
+#define ICCP_PRINCIPAL_ORIGIN   0x01
+#define ICCP_BACKUP_ORIGIN 		0x02
 
 // Name of the data received log file
 #define DATA_ANALOG_LOG "iccp_data_analog.bin"
@@ -115,17 +117,17 @@ typedef struct {
 } dataset_config;
 
 typedef struct {
-	unsigned int npontos[MAX_MSGS_SQ];
-	float values[MAX_MSGS_SQ];
-	unsigned char states[MAX_MSGS_SQ];
+	unsigned int npontos[MAX_MSGS_SQ_ANALOG];
+	float values[MAX_MSGS_SQ_ANALOG];
+	unsigned char states[MAX_MSGS_SQ_ANALOG];
 	unsigned int size;
 	unsigned int time;
 	Semaphore mutex;
 } st_analog_queue;
 
 typedef struct {
-	unsigned int npontos[MAX_MSGS_SQ];
-	unsigned char states[MAX_MSGS_SQ];
+	unsigned int npontos[MAX_MSGS_SQ_DIGITAL];
+	unsigned char states[MAX_MSGS_SQ_DIGITAL];
 	unsigned int size;
 	unsigned int time;
 	Semaphore mutex;

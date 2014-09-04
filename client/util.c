@@ -247,36 +247,33 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp)
 
 /*********************************************************************************************************/
 
-int check_connection(MmsConnection con, char * id_iccp) {
-	static int loop_error;
+int check_connection(MmsConnection con, char * id_iccp, int * loop_error) {
 	MmsError mmsError;
-	MmsValue* loop_value = NULL;
+	MmsValue* loop_value;
 
 	loop_value = MmsConnection_readVariable(con, &mmsError, id_iccp, "Bilateral_Table_ID");
 	if (loop_value == NULL){ 
 		LOG_MESSAGE( "WARNING - loop value == NULL \n");
 		if (mmsError == MMS_ERROR_CONNECTION_LOST){
-			printf("connection lost :(\n");
 			LOG_MESSAGE( "ERROR - Connection lost\n");
 			return -1;
 		}
 		else if (mmsError == MMS_ERROR_SERVICE_TIMEOUT){
-			loop_error++;
-			LOG_MESSAGE( " WARN - timeout resposta - %d\n", loop_error);
-			if(loop_error < MAX_READ_ERRORS){
-				LOG_MESSAGE("WARN - Read Service Timeout %d - mmsError %d\n", loop_error, mmsError);
+			*loop_error++;
+			LOG_MESSAGE( " WARN - timeout resposta - %d\n", *loop_error);
+			if(*loop_error < MAX_READ_ERRORS){
+				LOG_MESSAGE("WARN - Read Service Timeout %d - mmsError %d\n", *loop_error, mmsError);
 			}else {
 				LOG_MESSAGE( "aborting due to consecutive Read Service Timeouts\n");
 				LOG_MESSAGE( "ERROR - aborting due to consecutive Read Service Timeouts\n");
 				return -1;
 			}
 		} else if (mmsError == MMS_ERROR_NONE) {
-			loop_error++;
-			LOG_MESSAGE( "WARN - loop_erro %d\n", loop_error);
-			if(loop_error < MAX_READ_ERRORS){
-				LOG_MESSAGE("WARN - loop error %d reading value - mmsError %d\n", loop_error, mmsError);
+			*loop_error++;
+			LOG_MESSAGE( "WARN - loop_erro %d\n", *loop_error);
+			if(*loop_error < MAX_READ_ERRORS){
+				LOG_MESSAGE("WARN - loop error %d reading value - mmsError %d\n", *loop_error, mmsError);
 			}else {
-				printf("aborting due to consecutive errors reading value\n");
 				LOG_MESSAGE( "ERROR - aborting due to consecutive errors reading value\n");
 				return -1;
 			}
@@ -286,7 +283,7 @@ int check_connection(MmsConnection con, char * id_iccp) {
 		}
 	}else{                                                                                                                                     
 		MmsValue_delete(loop_value);
-		loop_error=0;
+		*loop_error=0;
 	}
 	return 0;
 }
@@ -299,10 +296,10 @@ int connect_to_server(MmsConnection con, char * server)
 
 	bool indication = MmsConnection_connect(con, &mmsError, server, 102);
 	if (indication){
-		printf("Connection OK - server %s !!!\n", server);
+		LOG_MESSAGE("Connection OK - server %s !!!\n", server);
 		return 0;
 	}
-	printf("Connection Error %d %d - server %s\n", indication, mmsError, server);
+	LOG_MESSAGE("Connection Error %d %d - server %s\n", indication, mmsError, server);
 	return -1;
 }
 

@@ -117,7 +117,7 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 
 MmsValue * get_next_transferset(MmsConnection con, char * id_iccp);
 
-int check_connection(MmsConnection con, char * id_iccp);
+int check_connection(MmsConnection con, char * id_iccp, int * loop_error);
 
 int connect_to_server(MmsConnection con, char * server);
 

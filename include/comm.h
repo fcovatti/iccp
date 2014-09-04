@@ -32,20 +32,8 @@ typedef struct {
 	unsigned int sec; // originator address (pode colocar zero)
 	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
 	unsigned int taminfo; // tamanho dos dados em info
-	unsigned char info[900]; // dado no formato padrão iec104
-} __attribute__((packed)) t_msgsupsq_analog;
-
-typedef struct {
-	unsigned int signature;  // 0x64646464, valor fixo
-	unsigned int numpoints; // numero de pontos a serem enviados
-	unsigned int tipo; // código do tipo IEC, pode ser somente o tipo 	digital simples com ou sem  tag e o 13 para analógicos
-	unsigned int prim; // endereço da estação primária, pode colocar zero
-	unsigned int sec; // originator address (pode colocar zero)
-	unsigned int causa; // código causa iec (20=GI, 3=exceção) , ligar o bit	0x40 para confirmação OK de comando
-	unsigned int taminfo; // tamanho dos dados em info
-	unsigned char info[500]; // dado no formato padrão iec104
-} __attribute__((packed)) t_msgsupsq_digital;
-
+	unsigned char info[1400]; // dado no formato padrão iec104
+} __attribute__((packed)) t_msgsupsq;
 
 //Em "info" colocar os dados para valor ponto flutuante ou digital
 
@@ -92,9 +80,14 @@ typedef struct
 #define	IHM_SINGLE_POINT_SIGN	0x53535353
 #define	IHM_POINT_LIST_SIGN		0x64646464
 
-#define MAX_MSGS_SQ			100
+#define MAX_MSGS_SQ_ANALOG	155
+#define MAX_MSGS_SQ_DIGITAL	280
+#define MAX_MSGS_GI_ANALOG	125
+#define MAX_MSGS_GI_DIGITAL	250
 
-int prepare_Wait(char * addr, int port);
+
+
+int prepare_Wait(int port);
 
 void * WaitT(unsigned int socketfd, int timeout_ms);
 

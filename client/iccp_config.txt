@@ -2,10 +2,12 @@
 IDICCP="HIS";
 
 // Name or IP of the remote iccp servers (tries to connect in ascending order)
-SERVER_NAME_1="10.63.5.43";
-SERVER_NAME_2="10.63.5.43";
-SERVER_NAME_3="10.63.5.43";
-SERVER_NAME_4="10.63.5.43";
+// Servers 1 to 4 Main ICCP Servers
+// Servers 5 to 6 Backup ICCP Servers
+SERVER_NAME_1="10.63.5.41";
+SERVER_NAME_2="10.63.5.41";
+SERVER_NAME_3="10.63.5.41";
+SERVER_NAME_4="10.63.5.41";
 SERVER_NAME_5="10.63.77.174";
 SERVER_NAME_6="10.63.77.174";
 SERVER_NAME_7="10.63.77.174";

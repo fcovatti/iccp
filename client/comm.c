@@ -136,7 +136,7 @@ int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_ad
 #endif
 
 /*********************************************************************************************************/
-int prepare_Wait(char *addr, int port)
+int prepare_Wait(int port)
 {
 	int socketfd;
 	int keepalive=1;
@@ -293,15 +293,15 @@ int send_analog_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsig
 /*********************************************************************************************************/
 int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, float * values, unsigned char * states, int list_size)
 {
-	t_msgsupsq_analog msg_sup;
+	t_msgsupsq msg_sup;
 	flutuante_seq float_value;
 	int i, offset;
 	
-	if(list_size > MAX_MSGS_SQ){
+	if(list_size > MAX_MSGS_SQ_ANALOG){
 		printf("wrong analog size list\n");
 		return -1;
 	}
-	memset(&msg_sup, 0, sizeof(t_msgsupsq_analog));
+	memset(&msg_sup, 0, sizeof(t_msgsupsq));
 	msg_sup.signature = IHM_POINT_LIST_SIGN;
 	msg_sup.numpoints = list_size;
 	msg_sup.prim = ihm_station;
@@ -317,7 +317,7 @@ int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,
 		memcpy(&(msg_sup.info[i*offset]),(char *) &npontos[i], sizeof(unsigned int));
 		memcpy(&(msg_sup.info[i*offset+sizeof(int)]),(char *) &float_value, sizeof(flutuante_seq));
 	}
-	i = SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq_analog), server_sock_addr);
+	i = SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq), server_sock_addr);
 	return i;
 
 }
@@ -392,16 +392,16 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 /*********************************************************************************************************/
 int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int * npontos, unsigned char ihm_station, unsigned char * states, int list_size)
 {
-	t_msgsupsq_digital msg_sup;
+	t_msgsupsq msg_sup;
 	digital_seq digital_value_gi;
 	int i, offset;
 	
-	if(list_size > MAX_MSGS_SQ){
+	if(list_size > MAX_MSGS_SQ_DIGITAL){
 		printf("wrong digital size list\n");
 		return -1;
 	}
 
-	memset(&msg_sup, 0, sizeof(t_msgsupsq_digital));
+	memset(&msg_sup, 0, sizeof(t_msgsupsq));
 	msg_sup.signature = IHM_POINT_LIST_SIGN;
 	msg_sup.numpoints = list_size;
 	msg_sup.prim = ihm_station;
@@ -415,7 +415,7 @@ int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr
 		memcpy(&(msg_sup.info[i*offset]),(char *) &npontos[i], sizeof(unsigned int));
 		memcpy(&(msg_sup.info[i*offset+sizeof(int)]),(char *) &digital_value_gi, sizeof(digital_seq));
 	}
-	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq_digital), server_sock_addr);
+	return SendT(socketfd,(void *)&msg_sup, sizeof(t_msgsupsq), server_sock_addr);
 }
 
 /*********************************************************************************************************/

@@ -36,12 +36,21 @@ static int num_of_datasets = 0;
 static int num_of_analog_datasets = 0;
 static int num_of_digital_datasets = 0;
 static int num_of_event_datasets = 0;
+
 static data_config * analog = NULL;
 static data_config * digital = NULL;
 static data_config * events = NULL;
+
 static command_config * commands = NULL;
 static dataset_config * dataset_conf = NULL;
 
+static MmsConnection conp; //connection main
+static MmsConnection conb;//connection backup
+
+static int conp_enabled;
+static int conb_enabled;
+static int conp_error;
+static int conb_error;
 
 //Configuration from file
 static char IDICCP[MAX_ID_ICCP_NAME];
@@ -49,10 +58,12 @@ static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX
 static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
 static int integrity_time=0, analog_buf=0, digital_buf=0, events_buf=0;
 
-//Backup ICCP
+//Backup ICCP client
 static char bkp_addr[MAX_STR_NAME];
-static int bkp_socket=0;
-static int bkp_enabled=0;
+static int bkp_socket;
+static int bkp_enabled;
+static int bkp_present;
+static unsigned int bkp_signature = ICCP_BACKUP_SIGNATURE;
 static struct sockaddr_in bkp_sock_addr;
 
 //IHM vars
@@ -64,14 +75,17 @@ static int ihm_station=0;
 static struct sockaddr_in ihm_sock_addr;
 static struct timeval start, curr_time;
 
-//Counters
+//IHM Counters
 static unsigned int events_msgs;
 static unsigned int digital_msgs;
 static unsigned int analog_msgs;
 
-//Analog buffer
+//IHM Analog buffer
 static st_analog_queue analog_queue;
 static st_digital_queue digital_queue;
+
+static Thread connections_thread;
+static Thread bkp_thread;
 
 
 /*********************************************************************************************************/
@@ -93,12 +107,12 @@ static int get_time_ms(){
 void handle_analog_integrity(int dataset, data_to_handle * handle)
 {
 	int i, offset, msg_queue =0;
-	unsigned int npontos[MAX_MSGS_SQ];
-	float values[MAX_MSGS_SQ];
-	unsigned char states[MAX_MSGS_SQ];
-	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
-	memset(values, 0, MAX_MSGS_SQ*sizeof(float));
-	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+	unsigned int npontos[MAX_MSGS_GI_ANALOG];
+	float values[MAX_MSGS_GI_ANALOG];
+	unsigned char states[MAX_MSGS_GI_ANALOG];
+	memset(npontos, 0, MAX_MSGS_GI_ANALOG*sizeof(unsigned int));
+	memset(values, 0, MAX_MSGS_GI_ANALOG*sizeof(float));
+	memset(states, 0, MAX_MSGS_GI_ANALOG*sizeof(unsigned char));
 
 	offset = dataset_conf[dataset].offset;
 
@@ -111,25 +125,25 @@ void handle_analog_integrity(int dataset, data_to_handle * handle)
 			values[msg_queue]= handle[i].f;
 			states[msg_queue]= handle[i].state;
 			msg_queue++;
-			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+			if (!(msg_queue%MAX_MSGS_GI_ANALOG)){//manda a cada 125
 				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_SQ)< 0){
-						LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+					if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
+						LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 					}else{
 						analog_msgs++;
 					}
-					memset(npontos, 0, MAX_MSGS_SQ);
-					memset(values,  0, MAX_MSGS_SQ);
-					memset(states,  0, MAX_MSGS_SQ);
+					memset(npontos, 0, MAX_MSGS_GI_ANALOG);
+					memset(values,  0, MAX_MSGS_GI_ANALOG);
+					memset(states,  0, MAX_MSGS_GI_ANALOG);
 				}
 				msg_queue=0;
 			}
 		}
 	}
 	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
-		if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_SQ))< 0){
-			LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+	if(msg_queue%MAX_MSGS_GI_ANALOG && ihm_enabled && ihm_socket_send > 0){
+		if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
+			LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 		}else{
 			analog_msgs++;
 		}
@@ -140,42 +154,38 @@ void handle_analog_integrity(int dataset, data_to_handle * handle)
 void handle_digital_integrity(int dataset, data_to_handle * handle){
 	int i, offset, msg_queue =0;
 	offset = dataset_conf[dataset].offset;
-	unsigned int npontos[MAX_MSGS_SQ];
-	unsigned char states[MAX_MSGS_SQ];
-	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
-	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+	unsigned int npontos[MAX_MSGS_GI_DIGITAL];
+	unsigned char states[MAX_MSGS_GI_DIGITAL];
+	memset(npontos, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned int));
+	memset(states, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned char));
 
 	for(i=0;i<dataset_conf[dataset].size;i++){
 		if(!digital[offset+i].not_present){
 			digital[offset+i].time_stamp = handle[i].time_stamp;
 			digital[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
-			if(!(handle[i].state&0x01)){
-				printf("nponto %d: ", digital[offset+i].nponto);
-				print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, digital[offset+i].state_on, digital[offset+i].state_off);
-			}
 			digital[offset+i].state = handle[i].state;
 			digital[offset+i].num_of_msg_rcv++;
 			npontos[msg_queue] = digital[offset+i].nponto;
 			states[msg_queue] = handle[i].state;
 			msg_queue++;
-			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+			if (!(msg_queue%MAX_MSGS_GI_DIGITAL)){//if queue is full
 				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_SQ)< 0){
-						LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 					
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+						LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 					}else{
 						digital_msgs++;
 					}
-					memset(npontos, 0, MAX_MSGS_SQ);
-					memset(states,  0, MAX_MSGS_SQ);
+					memset(npontos, 0, MAX_MSGS_GI_DIGITAL);
+					memset(states,  0, MAX_MSGS_GI_DIGITAL);
 				}
 				msg_queue=0;
 			}
 		}
 	}
 	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
-		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_SQ))< 0){
-			LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+	if(msg_queue%MAX_MSGS_GI_DIGITAL && ihm_enabled && ihm_socket_send > 0){
+		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
+			LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
 		}else{
 			digital_msgs++;
 		}
@@ -185,43 +195,39 @@ void handle_digital_integrity(int dataset, data_to_handle * handle){
 /*********************************************************************************************************/
 void handle_events_integrity(int dataset, data_to_handle * handle){
 	int i, offset,  msg_queue =0;
+	unsigned int npontos[MAX_MSGS_GI_DIGITAL]={0};
+	unsigned char states[MAX_MSGS_GI_DIGITAL]={0};
 	offset = dataset_conf[dataset].offset;
-	unsigned int npontos[MAX_MSGS_SQ]={0};
-	unsigned char states[MAX_MSGS_SQ]={0};
-	memset(npontos, 0, MAX_MSGS_SQ*sizeof(unsigned int));
-	memset(states, 0, MAX_MSGS_SQ*sizeof(unsigned char));
+	memset(npontos, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned int));
+	memset(states, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned char));
 	
 	for(i=0;i<dataset_conf[dataset].size;i++){
 		if(!events[offset+i].not_present){
 			events[offset+i].time_stamp = handle[i].time_stamp;
 			events[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
 			events[offset+i].state = handle[i].state;
-			if(!(handle[i].state&0x01)){
-				printf("nponto %d: ", events[offset+i].nponto);
-				print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events[offset+i].state_on, events[offset+i].state_off);
-			}
 			events[offset+i].num_of_msg_rcv++;
 			npontos[msg_queue] = events[offset+i].nponto;
 			states[msg_queue]= handle[i].state;
 			msg_queue++;
-			if (!(msg_queue%MAX_MSGS_SQ)){//manda a cada 100
+			if (!(msg_queue%MAX_MSGS_GI_DIGITAL)){//if queue is full
 				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_SQ)< 0){
-						LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ); 
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+						LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
 					}else{
 						digital_msgs++;
 					}
-					memset(npontos, 0, MAX_MSGS_SQ);
-					memset(states,  0, MAX_MSGS_SQ);
+					memset(npontos, 0, MAX_MSGS_GI_DIGITAL);
+					memset(states,  0, MAX_MSGS_GI_DIGITAL);
 				}
 				msg_queue=0;
 			}
 		}
 	}
 	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_SQ && ihm_enabled && ihm_socket_send > 0){
-		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_SQ))< 0){
-			LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_SQ );
+	if(msg_queue%MAX_MSGS_GI_DIGITAL && ihm_enabled && ihm_socket_send > 0){
+		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
+			LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL );
 		}else{
 			digital_msgs++;
 		}
@@ -261,8 +267,8 @@ void handle_analog_report(float value, unsigned char state, unsigned int index,t
 			analog_queue.values[analog_queue.size]=value;
 			analog_queue.npontos[analog_queue.size]=analog[index].nponto;
 			analog_queue.size++;
-			if(analog_queue.size==MAX_MSGS_SQ){//if queue is full, send to ihm
-				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ) <0){
+			if(analog_queue.size==MAX_MSGS_SQ_ANALOG){//if queue is full, send to ihm
+				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
 					LOG_MESSAGE( "Error sending analog buffer \n");
 				}else{
 					analog_msgs++;
@@ -314,8 +320,8 @@ void handle_digital_report(unsigned char state, unsigned int index,time_t time_s
 				digital_queue.states[digital_queue.size]=state;
 				digital_queue.npontos[digital_queue.size]=digital[index].nponto;
 				digital_queue.size++;
-				if(digital_queue.size==MAX_MSGS_SQ){//if queue is full, send to ihm
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ) <0){
+				if(digital_queue.size==MAX_MSGS_SQ_DIGITAL){//if queue is full, send to ihm
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 						LOG_MESSAGE( "Error sending digital buffer \n");
 					}else{
 						digital_msgs++;
@@ -374,8 +380,8 @@ void handle_event_report(unsigned char state, unsigned int index,time_t time_sta
 				digital_queue.states[digital_queue.size]=state;
 				digital_queue.npontos[digital_queue.size]=events[index].nponto;
 				digital_queue.size++;
-				if(digital_queue.size==MAX_MSGS_SQ){//if queue is full, send to ihm
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ) <0){
+				if(digital_queue.size==MAX_MSGS_SQ_DIGITAL){//if queue is full, send to ihm
+					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 						LOG_MESSAGE( "Error sending digital buffer \n");
 					}else{
 						digital_msgs++;
@@ -723,7 +729,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								//index = dataset_conf[offset].offset; // config index
 								index = 0;
 								dataset_conf[offset].num_of_rcv_gi++;
-								printf("ds %d gi %d\n",  offset,dataset_conf[offset].num_of_rcv_gi);
 
 								while (octet_offset < dataSetValue->value.octetString.size){
 									if(dataset_conf[offset].type == DATASET_DIGITAL){
@@ -770,7 +775,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 												if(dataSetValue->value.octetString.buf[octet_offset] == 0x53 && dataSetValue->value.octetString.buf[octet_offset+1] == 0xf3) {
 													if(octet_offset+6 <= dataSetValue->value.octetString.size){ 
 														if(dataSetValue->value.octetString.buf[octet_offset+6] == 0x71){
-															offset_size=RULE0_DIGITAL_REPORT_SIZE;//TODO: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
+															offset_size=RULE0_DIGITAL_REPORT_SIZE;//FIXME: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
 														}
 													}
 												}
@@ -902,7 +907,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 			i++;
 		}
 		//CONFIRM RECEPTION OF EVENT
-		MmsConnection_sendUnconfirmedPDU((MmsConnection)parameter,&mmsError,domain_id, transfer_set, time_stamp);
+		MmsConnection_sendUnconfirmedPDU(*((MmsConnection *)parameter),&mmsError,domain_id, transfer_set, time_stamp);
 		MmsValue_delete(value);
 	} else{
 		LOG_MESSAGE( "ERROR - wrong report %d %d %d %d\n",value != NULL, attributes != NULL , attributesCount , parameter != NULL);
@@ -1248,9 +1253,24 @@ static void sigint_handler(int signalId)
 	running = 0;
 }
 /*********************************************************************************************************/
-static void cleanup_variables(MmsConnection con)
+static void cleanup_variables()
 {
 	int i;
+	MmsError mmsError;
+
+	Thread_destroy(connections_thread);
+	if(bkp_enabled)
+		Thread_destroy(bkp_thread);
+
+	if(conp_enabled)
+		MmsConnection_conclude(conp, &mmsError);
+
+	if(conb_enabled)
+		MmsConnection_conclude(conb, &mmsError);
+
+	MmsConnection_destroy(conp);
+	MmsConnection_destroy(conb);
+
 	printf("cleanning up variables\n");
 
 	LOG_MESSAGE( "***************ANALOG***********************\n");
@@ -1283,7 +1303,6 @@ static void cleanup_variables(MmsConnection con)
 	free(analog);
 	free(digital);
 	free(events);
-	MmsConnection_destroy(con);
 	if(ihm_enabled){
 		close(ihm_socket_send);
 		close(ihm_socket_receive);
@@ -1316,35 +1335,34 @@ static int open_data_logs(void) {
 }
 #endif
 /*********************************************************************************************************/
-//(TODO: add connection handler)
-static int connect_to_iccp_server(MmsConnection * con){
-	if ((connect_to_server(*con, srv1) < 0)){
+/*static void connectionLostHandler(MmsConnection connection, void* parameter)
+{
+     unsigned int con_origin = (unsigned int) parameter;
+	 if (con_origin==ICCP_BACKUP_ORIGIN){
+		 printf("lost backup connection\n");
+		 conp_enabled = 0;
+	 } else if (con_origin==ICCP_PRINCIPAL_ORIGIN){
+		printf("lost main connection\n");
+		conb_enabled = 0;
+	 } else{
+		 printf("lost unknown connection\n");
+	 }
+}*/
+/*********************************************************************************************************/
+static int connect_to_iccp_server(MmsConnection * con, char * srv_1, char *srv_2, char *srv_3, char *srv_4){
+	if ((connect_to_server(*con, srv_1) < 0)){
 		MmsConnection_destroy(*con);
 		*con = MmsConnection_create();
-		if ((connect_to_server(*con, srv2) < 0)){
+		if ((connect_to_server(*con, srv_2) < 0)){
 			MmsConnection_destroy(*con);
 			*con = MmsConnection_create();
-			if ((connect_to_server(*con, srv3) < 0)){
+			if ((connect_to_server(*con, srv_3) < 0)){
 				MmsConnection_destroy(*con);
 				*con = MmsConnection_create();
-				if ((connect_to_server(*con, srv4) < 0)){
+				if ((connect_to_server(*con, srv_4) < 0)){
 					MmsConnection_destroy(*con);
 					*con = MmsConnection_create();
-					if ((connect_to_server(*con, srv5) < 0)){
-						MmsConnection_destroy(*con);
-						*con = MmsConnection_create();
-						if ((connect_to_server(*con, srv6) < 0)){
-							MmsConnection_destroy(*con);
-							*con = MmsConnection_create();
-							if ((connect_to_server(*con, srv7) < 0)){
-								MmsConnection_destroy(*con);
-								*con = MmsConnection_create();
-								if ((connect_to_server(*con, srv8) < 0)){
-									return -1;
-								}
-							}
-						}
-					}
+					return -1;
 				}
 			}
 		}
@@ -1360,7 +1378,7 @@ static int create_ihm_comm(){
 	}	
 	printf("Created UDP socket %d for IHM %s Port %d\n",ihm_socket_send, ihm_addr, PORT_IHM_TRANSMIT);
 
-	ihm_socket_receive = prepare_Wait(NULL, PORT_IHM_LISTEN);
+	ihm_socket_receive = prepare_Wait(PORT_IHM_LISTEN);
 	if(ihm_socket_receive < 0){
 		printf("could not create UDP socket to listen to IHM\n");
 		close(ihm_socket_send);
@@ -1372,7 +1390,7 @@ static int create_ihm_comm(){
 /*********************************************************************************************************/
 static int create_bkp_comm(){
 
-	bkp_socket = prepare_Wait(bkp_addr,PORT_ICCP_BACKUP);
+	bkp_socket = prepare_Wait(PORT_ICCP_BACKUP);
 	if(bkp_socket < 0){
 		printf("could not create UDP socket to listen to Backup ICCP Client\n");
 		return -1;
@@ -1397,7 +1415,7 @@ static int check_backup(unsigned int msg_timeout){
 	return -1;
 }
 /*********************************************************************************************************/
-static void check_commands(MmsConnection con){
+static void check_commands(){
 	char * msg_rcv;
 	msg_rcv = WaitT(ihm_socket_receive, 2000);	
 	if(msg_rcv != NULL) {
@@ -1420,7 +1438,8 @@ static void check_commands(MmsConnection con){
 			LOG_MESSAGE( "Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
 					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
 
-			if(command_variable(con, commands[i].id, cmd_recv.onoff)<0){
+			//TODO:check if both connections enabled and send to the one with monitored state valid
+			if(command_variable(conp, commands[i].id, cmd_recv.onoff)<0){
 				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
 				LOG_MESSAGE("Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
 			} else {
@@ -1438,97 +1457,70 @@ static void check_commands(MmsConnection con){
 	}
 }
 /*********************************************************************************************************/
-int main (int argc, char ** argv){
-	unsigned int i = 0;
-	unsigned int bkp_present;
-	unsigned int bkp_signature = ICCP_BACKUP_SIGNATURE;
-	MmsError mmsError;
-	signal(SIGINT, sigint_handler);
-	MmsConnection con = MmsConnection_create();
-	gettimeofday(&start, NULL);
-	analog_queue.mutex = Semaphore_create(1); //semaphore
-	digital_queue.mutex = Semaphore_create(1); //semaphore
-	// READ CONFIGURATION FILE
-	if (read_configuration() != 0) {
-		printf("Error reading configuration\n");
-		return -1;
-	} else {
-		printf("Start configuration with:\n  %d analog, %d digital, %d events, %d commands\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands);
-		printf("  %d datasets:\n   - %d analog\n   - %d digital \n   - %d events \n", num_of_datasets, num_of_analog_datasets, num_of_digital_datasets, num_of_event_datasets);
+static void * check_bkp_thread(void * parameter)
+{
+	printf("Backup Thread Started\n");
+	static int counter;
+	while(running){
+		if(check_backup(2000) == 0){
+			running = 0;	
+			LOG_MESSAGE("ERROR - Detected backup from other server - exiting\n");
+		}
+		if(SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr) < 0){
+			running = 0;
+			LOG_MESSAGE("Error sending message to backup server\n");
+		}
 	}
+	return NULL;
+}
 
-	// OPEN DATA LOG FILES	
-#ifdef DATA_LOG
-	if(open_data_logs()<0) {
-		printf("Error, cannot open configuration data log files\n");
-		cleanup_variables(con);
-		return -1;
-	}
-#endif
-
-	//CHECK IF BACKUP ICCP IS CONFIGURED
+/*********************************************************************************************************/
+int start_bkp_configuration(void){
 	if(strcmp(bkp_addr,"no")==0) {
 		printf("no iccp client backup configured\n");
 		bkp_present=0;
 	}else{
 		bkp_enabled=1;
 		bkp_present=10;
+		printf("bkp enabled\n");
 		if(create_bkp_comm() < 0){
 			printf("Error, cannot open communication to bkp server\n");
-			cleanup_variables(con);
 			return -1;
 		}
-	}
-
-	//Check if Backup ICCP client is running
-	while (bkp_present && running){
-		if(check_backup(((rand()%400) + 600)) < 0){//random buffer timeout
-			bkp_present--;
-		}else{
-			bkp_present=10;
+		while (running && bkp_present){
+			if(check_backup(((rand()%400) + 600)) < 0){//random buffer timeout
+				bkp_present--;
+			}else{
+				bkp_present=10;
+			}
 		}
-	}
-	if(!running){
-		cleanup_variables(con);
-		return -1;
-	}
 
-	//Send Message to backup in order to mantain it disabled	
-	if (bkp_enabled){
+		if(!running){
+			return -1;
+		}	
+
+		//Send Message to backup in order to mantain it disabled	
 		if((SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
 			LOG_MESSAGE("Error sending message to backup server on initialization\n");
-			cleanup_variables(con);
 			return -1;
 		}
 		if ((SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
 			LOG_MESSAGE("Error sending message to backup server on initialization\n");
-			cleanup_variables(con);
 			return -1;
 		}
-		printf("Bckup client not alive\n");
-	}
-	
-	//INITIALIZE IHM CONNECTION 
-	if(strcmp(ihm_addr,"no")==0) {
-		printf("no ihm configured\n");
-	}else{
-		ihm_enabled=1;
-		if(create_ihm_comm() < 0){
-			printf("Error, cannot open communication to ihm server\n");
-			cleanup_variables(con);
-			return -1;
-		}
-	}
-	
-	//INITIALIZE ICCP CONNECTION 
-	if(connect_to_iccp_server(&con) < 0){
-		printf("Error, cannot connect to iccp server\n");
-		cleanup_variables(con);
-		return -1;
-	}
 
+		bkp_thread = Thread_create(check_bkp_thread, NULL, false);
+		Thread_start(bkp_thread);
 
-	// DELETE DATASETS WHICH WILL BE USED
+		printf("Backup client not alive\n");
+	}
+	return 0;
+}
+/*********************************************************************************************************/
+static int start_iccp(MmsConnection con){
+	int i;
+	MmsError mmsError;
+// DELETE DATASETS WHICH WILL BE USED
 	printf("deleting data sets     ");
 	for (i=0; i < num_of_datasets; i++) {
 		fflush(stdout);
@@ -1544,7 +1536,6 @@ int main (int argc, char ** argv){
 		MmsValue *transfer_set_dig  = get_next_transferset(con,IDICCP);
 		if( transfer_set_dig == NULL) {	
 			printf("\nCould not create transfer set for digital data\n");
-			cleanup_variables(con);
 			return -1;
 		} else {
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
@@ -1563,21 +1554,12 @@ int main (int argc, char ** argv){
 	}
 	printf("\n");
 
-	// HANDLE REPORTS
-	MmsConnection_setInformationReportHandler(con, informationReportHandler, (void *) con);
-
+		
 	// WRITE DATASETS TO TRANSFERSET
 	printf("Write/Read data sets   ");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		
-		//Send Message to backup in order to mantain it disabled	
-		if (bkp_enabled && (SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr)) < 0){
-			LOG_MESSAGE("Error sending message to backup server on initialization\n");
-			cleanup_variables(con);
-			return -1;
-		}
-
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, 0);
 			read_dataset(con, dataset_conf[i].id, i);
@@ -1592,39 +1574,147 @@ int main (int argc, char ** argv){
 		}
 		else{
 			printf("\nunknown write dataset type\n");
-			cleanup_variables(con);
 			return -1;
 		}
 		Thread_sleep(1100);//sleep 1.1s for different report times (better handling)
 		printf(".");
 	}
 	printf("\n");
+
+	return 0;
+}
+/*********************************************************************************************************/
+static void * check_connections_thread(void * parameter)
+{
+	printf("Connections Thread Started\n");
+	//if connection not enabled or lost, restart all
+	while(running){
+		if (conp_enabled){
+			if (check_connection(conp,IDICCP, &conp_error) < 0){
+				conp_enabled=0;
+			}
+		} else {
+			if(connect_to_iccp_server(&conp, srv1,srv2,srv3,srv4) == 0){
+				if(start_iccp(conp)<0){
+					printf("could not start configuration for connection principal\n");
+					running = 0;
+				} else
+					conp_enabled=1;
+			}
+		}
+		if (conb_enabled){
+			if (check_connection(conb,IDICCP, &conb_error) < 0){
+				conb_enabled=0;
+			}
+		} else {
+	/*		if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) == 0){
+				if(start_iccp(conb)<0){
+					printf("could not start configuration for connection backup\n");
+					running = 0;
+				} else
+					conb_enabled=1;
+			}
+			*/
+		}
+		Thread_sleep(2000);
+	}
+	return NULL;
+
+}
+/*********************************************************************************************************/
+int main (int argc, char ** argv){
+	unsigned int i = 0;
+	gettimeofday(&start, NULL);
+	signal(SIGINT, sigint_handler);
+	conp = MmsConnection_create();
+	conb = MmsConnection_create();
+	analog_queue.mutex = Semaphore_create(1); //semaphore
+	digital_queue.mutex = Semaphore_create(1); //semaphore
+	
+	// READ CONFIGURATION FILE
+	if (read_configuration() != 0) {
+		printf("Error reading configuration\n");
+		return -1;
+	} else {
+		printf("Start configuration with:\n  %d analog, %d digital, %d events, %d commands\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands);
+		printf("  %d datasets:\n   - %d analog\n   - %d digital \n   - %d events \n", num_of_datasets, num_of_analog_datasets, num_of_digital_datasets, num_of_event_datasets);
+	}
+
+	// OPEN DATA LOG FILES	
+#ifdef DATA_LOG
+	if(open_data_logs()<0) {
+		printf("Error, cannot open configuration data log files\n");
+		cleanup_variables();
+		return -1;
+	}
+#endif
+
+	//CHECK IF BACKUP ICCP IS CONFIGURED AND START IT
+	if(start_bkp_configuration() < 0){
+		cleanup_variables();
+		return -1;
+	}
+			
+	//INITIALIZE IHM CONNECTION 
+	if(strcmp(ihm_addr,"no")==0) {
+		printf("no ihm configured\n");
+	}else{
+		ihm_enabled=1;
+		if(create_ihm_comm() < 0){
+			printf("Error, cannot open communication to ihm server\n");
+			cleanup_variables();
+			return -1;
+		}
+	}
+	
+	//INITIALIZE ICCP CONNECTIONs 
+	if(connect_to_iccp_server(&conp, srv1,srv2,srv3,srv4) < 0){
+		printf("Warning, cannot connect to iccp server main\n");
+	} else{
+		conp_enabled = 1;
+	}
+/*	if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) < 0){
+		printf("Warning, cannot connect to iccp server backup\n");
+	} else {
+		conb_enabled = 1;
+	}
+*/
+	if(!conp_enabled && !conb_enabled){
+		printf("Error,Could not connect to any iccp servers\n");
+	}
+	
+	// HANDLE REPORTS
+	MmsConnection_setInformationReportHandler(conp, informationReportHandler, (void *) &conp);
+	MmsConnection_setInformationReportHandler(conb, informationReportHandler, (void *) &conb);
+
+	//START ICCP CONFIGURATION
+	if(conp_enabled){
+	   if(start_iccp(conp)<0){
+			printf("could not start configuration for connection principal\n");
+	   }
+	}
+	if(conb_enabled){
+	   if(start_iccp(conb)<0){
+			printf("could not start configuration for connection backup\n");
+	   }
+	}
+		
+	connections_thread = Thread_create(check_connections_thread, NULL, false);
+	Thread_start(connections_thread);
 	
 	printf("ICCP Process Successfully Started!\n");
-	
+
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {
 		printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
 				 analog_msgs, digital_msgs, events_msgs);
 
-		//Send Message to backup in order to mantain it disabled	
-		if (bkp_enabled){
-			if(check_backup(20) == 0){
-				LOG_MESSAGE("ERROR - Detected backup from other server - exiting\n");
-				break;
-			}
-			if(SendT(bkp_socket,(void *)&bkp_signature, sizeof(unsigned int), &bkp_sock_addr) < 0){
-				LOG_MESSAGE("Error sending message to backup server\n");
-				break;
-			}
-		}
-
 		if(ihm_enabled)
-			check_commands(con);
+			check_commands();
 		else
 			Thread_sleep(2000);
 	
-		// EMPTY ANALOG BUFFER	
+		// EMPTY ANALOG QUEUE	
 		Semaphore_wait(analog_queue.mutex);	
 		if(analog_queue.size && ((get_time_ms()-analog_queue.time) > 4000)){//timeout to send analog buffered messages if not empty
 			if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
@@ -1636,7 +1726,7 @@ int main (int argc, char ** argv){
 		}
 		Semaphore_post(analog_queue.mutex);	
 
-		// EMPTY DIGITAL BUFFER	
+		// EMPTY DIGITAL QUEUE	
 		Semaphore_wait(digital_queue.mutex);	
 		if(digital_queue.size && ((get_time_ms()- digital_queue.time) > 3000)){//timeout to send digital buffered messages if not empty
 			if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
@@ -1648,12 +1738,9 @@ int main (int argc, char ** argv){
 		}
 		Semaphore_post(digital_queue.mutex);	
 
-	
-		if (check_connection(con,IDICCP) < 0)
-			break;
 	}
 
-	cleanup_variables(con);
+	cleanup_variables();
 
 	return 0;
 }
