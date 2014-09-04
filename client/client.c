@@ -771,14 +771,24 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 									} else if(dataset_conf[offset].type == DATASET_ANALOG){
 										offset_size=RULE0_ANALOG_REPORT_SIZE;
 										if(analog[index+dataset_conf[offset].offset].not_present){
-											if(octet_offset+2 <= dataSetValue->value.octetString.size){ 
-												if(dataSetValue->value.octetString.buf[octet_offset] == 0x53 && dataSetValue->value.octetString.buf[octet_offset+1] == 0xf3) {
-													if(octet_offset+6 <= dataSetValue->value.octetString.size){ 
-														if(dataSetValue->value.octetString.buf[octet_offset+6] == 0x71){
-															offset_size=RULE0_DIGITAL_REPORT_SIZE;//FIXME: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
-														}
-													}
-												}
+											if(octet_offset+6 <= dataSetValue->value.octetString.size){ 
+												//if not 0 invalid and last byte
+												if(!dataSetValue->value.octetString.buf[octet_offset] && !dataSetValue->value.octetString.buf[octet_offset+1] &&
+															!dataSetValue->value.octetString.buf[octet_offset+2] && !dataSetValue->value.octetString.buf[octet_offset+3] && dataSetValue->value.octetString.buf[octet_offset+4] == 0x30){
+														offset_size=RULE0_ANALOG_REPORT_SIZE;
+												}else if	(dataSetValue->value.octetString.buf[octet_offset+6] == 0x71){
+													offset_size=RULE0_DIGITAL_REPORT_SIZE;//FIXME: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
+												}else{
+													printf("not present %d - %x %x %x %x %x %x %x\n",analog[index+dataset_conf[offset].offset].nponto
+															,dataSetValue->value.octetString.buf[octet_offset+0]
+															,dataSetValue->value.octetString.buf[octet_offset+1]
+															,dataSetValue->value.octetString.buf[octet_offset+2]
+															,dataSetValue->value.octetString.buf[octet_offset+3]
+															,dataSetValue->value.octetString.buf[octet_offset+4]
+															,dataSetValue->value.octetString.buf[octet_offset+5]
+															,dataSetValue->value.octetString.buf[octet_offset+6]
+														  );
+												}	
 											}
 										}
 										else{ 
@@ -1562,15 +1572,18 @@ static int start_iccp(MmsConnection con){
 		
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, 0);
-			read_dataset(con, dataset_conf[i].id, i);
+			if(read_dataset(con, dataset_conf[i].id, i) < 0)
+				return -1;
 		}
 		else if(dataset_conf[i].type == DATASET_DIGITAL){
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf,integrity_time, 1);
-			read_dataset(con, dataset_conf[i].id, i);
+			if(read_dataset(con, dataset_conf[i].id, i) < 0)
+				return -1;
 		}
 		else if(dataset_conf[i].type == DATASET_EVENTS){
 			write_dataset(con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, integrity_time, 1);
-			read_dataset(con, dataset_conf[i].id, i);
+			if(read_dataset(con, dataset_conf[i].id, i) < 0)
+				return -1;
 		}
 		else{
 			printf("\nunknown write dataset type\n");
@@ -1595,7 +1608,8 @@ static void * check_connections_thread(void * parameter)
 			}
 		} else {
 			if(connect_to_iccp_server(&conp, srv1,srv2,srv3,srv4) == 0){
-				if(start_iccp(conp)<0){
+				Thread_sleep(5000);
+				if((check_connection(conp,IDICCP, &conp_error) < 0)&&(start_iccp(conp)<0)){
 					printf("could not start configuration for connection principal\n");
 					running = 0;
 				} else
@@ -1608,7 +1622,8 @@ static void * check_connections_thread(void * parameter)
 			}
 		} else {
 	/*		if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) == 0){
-				if(start_iccp(conb)<0){
+	 			Thread_sleep(5000);
+				if((check_connection(conb,IDICCP, &conb_error)&&(start_iccp(conb)<0)){
 					printf("could not start configuration for connection backup\n");
 					running = 0;
 				} else
@@ -1706,8 +1721,8 @@ int main (int argc, char ** argv){
 
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {
-		printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
-				 analog_msgs, digital_msgs, events_msgs);
+		//printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
+		//		 analog_msgs, digital_msgs, events_msgs);
 
 		if(ihm_enabled)
 			check_commands();
