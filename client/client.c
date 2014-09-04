@@ -22,6 +22,8 @@
 //#define DEBUG_READ_DATASET 1
 //#define DEBUG_DIGITAL_REPORTS 1
 //#define DEBUG_EVENTS_REPORTS	1
+//#define LOG_CONFIG	1
+//#define LOG_COUNETERS	1
 //#define DATA_LOG 1
 /*********************************************************************************************************/
 
@@ -690,7 +692,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 				continue;
 			}
 
-
 			if (strncmp("Transfer_Set_Time_Stamp", attribute_name, 23) == 0) {
 				time_stamp =  MmsValue_toUint32(dataSetValue);
 				i++;
@@ -726,7 +727,6 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								}
 
 								octet_offset = 1; 
-								//index = dataset_conf[offset].offset; // config index
 								index = 0;
 								dataset_conf[offset].num_of_rcv_gi++;
 
@@ -1209,6 +1209,7 @@ static int read_configuration() {
 		}
 	}
 
+#ifdef LOG_CONFIG
 	LOG_MESSAGE( "***************ANALOG***********************\n");
 	LOG_MESSAGE( " DATASET OFFSET NPONTO DESCRITIVO\n");
 	for (i=0; i < num_of_analog_ids; i++) {
@@ -1232,6 +1233,7 @@ static int read_configuration() {
 	for (i=0; i < num_of_commands; i++) {
 		LOG_MESSAGE( "%d %d \t %d \t%s \t\n",i, commands[i].nponto, commands[i].monitored,  commands[i].id);
 	}
+#endif
 
 	num_of_analog_datasets = num_of_analog_ids/DATASET_MAX_SIZE;
 	if(num_of_analog_ids%DATASET_MAX_SIZE)
@@ -1283,6 +1285,7 @@ static void cleanup_variables()
 
 	printf("cleanning up variables\n");
 
+#ifdef LOG_COUNTERS
 	LOG_MESSAGE( "***************ANALOG***********************\n");
 	LOG_MESSAGE( " DATASET OFFSET NPONTO RCV_MSGS DESCRITIVO\n");
 	for (i=0; i < num_of_analog_ids; i++) {
@@ -1300,7 +1303,7 @@ static void cleanup_variables()
 	for (i=0; i < num_of_event_ids; i++) {
 		LOG_MESSAGE( "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, events[i].nponto, events[i].num_of_msg_rcv, events[i].id);
 	}
-
+#endif
 	printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
 				 analog_msgs, digital_msgs, events_msgs);
 #ifdef DATA_LOG
@@ -1321,7 +1324,6 @@ static void cleanup_variables()
 		close(bkp_socket);
 	}
 }
-
 /*********************************************************************************************************/
 #ifdef DATA_LOG
 static int open_data_logs(void) {
@@ -1344,20 +1346,6 @@ static int open_data_logs(void) {
 
 }
 #endif
-/*********************************************************************************************************/
-/*static void connectionLostHandler(MmsConnection connection, void* parameter)
-{
-     unsigned int con_origin = (unsigned int) parameter;
-	 if (con_origin==ICCP_BACKUP_ORIGIN){
-		 printf("lost backup connection\n");
-		 conp_enabled = 0;
-	 } else if (con_origin==ICCP_PRINCIPAL_ORIGIN){
-		printf("lost main connection\n");
-		conb_enabled = 0;
-	 } else{
-		 printf("lost unknown connection\n");
-	 }
-}*/
 /*********************************************************************************************************/
 static int connect_to_iccp_server(MmsConnection * con, char * srv_1, char *srv_2, char *srv_3, char *srv_4){
 	if ((connect_to_server(*con, srv_1) < 0)){
@@ -1608,12 +1596,15 @@ static void * check_connections_thread(void * parameter)
 			}
 		} else {
 			if(connect_to_iccp_server(&conp, srv1,srv2,srv3,srv4) == 0){
-				Thread_sleep(5000);
-				if((check_connection(conp,IDICCP, &conp_error) < 0)&&(start_iccp(conp)<0)){
+				MmsConnection_setInformationReportHandler(conp, informationReportHandler, (void *) &conp);
+				Thread_sleep(10000);
+				if((check_connection(conp,IDICCP, &conp_error) < 0) || (start_iccp(conp)<0)){
 					printf("could not start configuration for connection principal\n");
 					running = 0;
-				} else
+				} else{
 					conp_enabled=1;
+				}
+
 			}
 		}
 		if (conb_enabled){
@@ -1621,6 +1612,7 @@ static void * check_connections_thread(void * parameter)
 				conb_enabled=0;
 			}
 		} else {
+			//TODO:connect to both clients
 	/*		if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) == 0){
 	 			Thread_sleep(5000);
 				if((check_connection(conb,IDICCP, &conb_error)&&(start_iccp(conb)<0)){
@@ -1688,6 +1680,7 @@ int main (int argc, char ** argv){
 	} else{
 		conp_enabled = 1;
 	}
+	//TODO:connect to dual servers
 /*	if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) < 0){
 		printf("Warning, cannot connect to iccp server backup\n");
 	} else {
@@ -1721,8 +1714,6 @@ int main (int argc, char ** argv){
 
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {
-		//printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
-		//		 analog_msgs, digital_msgs, events_msgs);
 
 		if(ihm_enabled)
 			check_commands();
