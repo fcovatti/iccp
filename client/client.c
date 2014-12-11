@@ -18,13 +18,13 @@
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
 //#define HANDLE_EVENTS_DATA_DEBUG 1
-//#define REPORTS_ONLY_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
 //#define DEBUG_DIGITAL_REPORTS 1
 //#define DEBUG_EVENTS_REPORTS	1
 //#define LOG_CONFIG	1
-//#define LOG_COUNETERS	1
+//#define LOG_COUNTERS	1
 //#define DATA_LOG 1
+//#define WINE_TESTING 1
 /*********************************************************************************************************/
 
 static int running = 1; //used on handler for signal interruption
@@ -85,6 +85,8 @@ static unsigned int analog_msgs;
 //IHM Analog buffer
 static st_analog_queue analog_queue;
 static st_digital_queue digital_queue;
+static Semaphore digital_mutex;
+Semaphore localtime_mutex;
 
 static Thread connections_thread;
 static Thread bkp_thread;
@@ -332,11 +334,13 @@ void handle_digital_report(unsigned char state, unsigned int index,time_t time_s
 				}
 				Semaphore_post(digital_queue.mutex);	
 			}else{
-				if( send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
+				Semaphore_wait(digital_mutex);	
+				if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 					LOG_MESSAGE( "Error sending nponto %d\n", digital[index].nponto);
 				}else{
 					events_msgs++;
 				}
+				Semaphore_post(digital_mutex);	
 			}
 		}
 	}
@@ -392,12 +396,13 @@ void handle_event_report(unsigned char state, unsigned int index,time_t time_sta
 				}
 				Semaphore_post(digital_queue.mutex);	
 			}else{
-
+				Semaphore_wait(digital_mutex);	
 				if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 					LOG_MESSAGE( "Error sending nponto %d\n", digital[index].nponto);
 				}else{
 					events_msgs++;
 				}
+				Semaphore_post(digital_mutex);	
 			}
 		}
 	}
@@ -951,7 +956,11 @@ static int read_configuration() {
 	struct tm now = *localtime(&t); 
 
 #ifdef WIN32
+#ifdef WINE_TESTING
+	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#else
 	snprintf(error_log,MAX_STR_NAME, "..\\logs\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#endif
 #else
 	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
 #endif
@@ -1637,6 +1646,9 @@ int main (int argc, char ** argv){
 	conb = MmsConnection_create();
 	analog_queue.mutex = Semaphore_create(1); //semaphore
 	digital_queue.mutex = Semaphore_create(1); //semaphore
+    digital_mutex = Semaphore_create(1); //semaphore
+    localtime_mutex = Semaphore_create(1); //semaphore
+
 	
 	// READ CONFIGURATION FILE
 	if (read_configuration() != 0) {

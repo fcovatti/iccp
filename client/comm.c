@@ -10,7 +10,10 @@
 #include <socket.h>
 #include <time.h>	/* For size_t */
 
+#include "thread.h"
 #include "comm.h"
+
+extern Semaphore localtime_mutex;
 
 #ifdef WIN32
 
@@ -21,7 +24,12 @@
 #include <stdbool.h>
 #include <windows.h>
 
-
+static struct tm *localtime_r(const time_t *tloc, struct tm *result) {
+	struct tm *tm;
+	if((tm = localtime(tloc)))
+		return memcpy(result, tm, sizeof(struct tm));
+	return 0;
+}
 
 /*********************************************************************************************************/
 int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
@@ -350,6 +358,9 @@ static unsigned char get_digital_state(unsigned char state)
 }
 /*********************************************************************************************************/
 int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsigned int nponto, unsigned char ihm_station, unsigned char state, time_t time_stamp,unsigned short time_stamp_extended, char report){
+	//struct tm * time_result;
+	struct tm time_result = {0};
+
 	t_msgsup msg_sup;
 	unsigned char digital_state;
 
@@ -362,19 +373,31 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 
 	//only send as report if timestamp is valid
 	if(!(state&0x01) && report){
-		struct tm * time_result;
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
 		msg_sup.tipo=30;
 		msg_sup.taminfo=sizeof(digital_w_time7_seq);
 		digital_value.iq = digital_state;
-		time_result = (struct tm *)localtime(&time_stamp);
-		digital_value.ms=(time_result->tm_sec*1000)+time_stamp_extended;
+		//time_result = (struct tm *)localtime(&time_stamp);
+		//
+		Semaphore_wait(localtime_mutex);	
+		if(localtime_r(&time_stamp, &time_result) == 0){
+			printf("error obtaining localtime nponto %d, time_stamp %d \n", nponto, time_stamp);
+		}
+		Semaphore_post(localtime_mutex);	
+
+		digital_value.ms=(time_result.tm_sec*1000)+time_stamp_extended;
+		digital_value.min=time_result.tm_min;
+		digital_value.hora=time_result.tm_hour;
+		digital_value.dia=time_result.tm_mday;
+		digital_value.mes=time_result.tm_mon+1;
+		digital_value.ano=time_result.tm_year-100;
+		/*digital_value.ms=(time_result->tm_sec*1000)+time_stamp_extended;
 		digital_value.min=time_result->tm_min;
 		digital_value.hora=time_result->tm_hour;
 		digital_value.dia=time_result->tm_mday;
 		digital_value.mes=time_result->tm_mon+1;
-		digital_value.ano=time_result->tm_year-100;
+		digital_value.ano=time_result->tm_year-100;*/
 		memcpy(msg_sup.info,(char *) &digital_value, sizeof(digital_w_time7_seq));
 	}
 	else {

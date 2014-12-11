@@ -9,6 +9,15 @@
 #include "mms_client_connection.h"
 #include "util.h"
 #include "client.h"
+extern Semaphore localtime_mutex;
+#ifdef WIN32
+static struct tm *localtime_r(const time_t *tloc, struct tm *result) {
+	struct tm *tm;
+	if((tm = localtime(tloc)))
+		return memcpy(result, tm, sizeof(struct tm));
+	return 0;
+}
+#endif
 
 /*********************************************************************************************************/
 void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_name, int buffer_time, int integrity_time, int all_changes_reported)
@@ -337,6 +346,11 @@ int command_variable(MmsConnection con, char * variable, int value)
 /*********************************************************************************************************/
 void print_time(FILE * log_file){
 	time_t t = time(NULL);
-	struct tm now = *localtime(&t); 
+	//struct tm now = *localtime(&t); 
+	struct tm now = {0};
+
+	Semaphore_wait(localtime_mutex);	
+   	localtime_r(&t, &now ); 
+	Semaphore_post(localtime_mutex);	
 	fprintf(log_file, "%04d/%02d/%02d %02d:%02d:%02d - ", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min,now.tm_sec);
 }
