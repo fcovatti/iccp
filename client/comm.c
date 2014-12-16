@@ -372,7 +372,7 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 	digital_state = get_digital_state(state);
 
 	//only send as report if timestamp is valid
-	if(!(state&0x01) && report){
+	if(!(state&0x01) && report && time_stamp != 0xffffffff){
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
 		msg_sup.tipo=30;
@@ -382,7 +382,7 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 		//
 		Semaphore_wait(localtime_mutex);	
 		if(localtime_r(&time_stamp, &time_result) == 0){
-			printf("error obtaining localtime nponto %d, time_stamp %d \n", nponto, time_stamp);
+			printf("error obtaining localtime nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
 		}
 		Semaphore_post(localtime_mutex);	
 
@@ -403,7 +403,11 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 	else {
 		digital_seq digital_value_gi;
 		msg_sup.tipo=1;
-		msg_sup.causa=20; //integrity
+		if(report){
+			msg_sup.causa=3; //report
+			printf("report with invalid timestamp nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
+		}else
+			msg_sup.causa=20; //integrity
 		msg_sup.taminfo=sizeof(digital_seq);
 		digital_value_gi.iq = digital_state;
 		memcpy(msg_sup.info,(char *) &digital_value_gi, sizeof(digital_seq));
