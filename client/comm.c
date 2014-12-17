@@ -392,12 +392,6 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 		digital_value.dia=time_result.tm_mday;
 		digital_value.mes=time_result.tm_mon+1;
 		digital_value.ano=time_result.tm_year-100;
-		/*digital_value.ms=(time_result->tm_sec*1000)+time_stamp_extended;
-		digital_value.min=time_result->tm_min;
-		digital_value.hora=time_result->tm_hour;
-		digital_value.dia=time_result->tm_mday;
-		digital_value.mes=time_result->tm_mon+1;
-		digital_value.ano=time_result->tm_year-100;*/
 		memcpy(msg_sup.info,(char *) &digital_value, sizeof(digital_w_time7_seq));
 	}
 	else {
