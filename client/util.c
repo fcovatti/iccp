@@ -188,7 +188,7 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 
 	//10
 	//RBE?
-	//TODO: if true send notification if lost event
+	//FIXME: if true send notification if lost event
 	elem = MmsValue_getElement(dataset, 10);
 	if(all_changes_reported)
 		MmsValue_setBoolean(elem, true);

@@ -7,12 +7,12 @@ static MmsValue*
 createOriginValue(void)
 {
     MmsValue* origin = MmsValue_createEmptyStructure(2);
-    MmsValue* orCat = MmsValue_newIntegerFromInt16(0);//self->orCat);//TODO orCat
+    MmsValue* orCat = MmsValue_newIntegerFromInt16(0);//self->orCat);//FIXME orCat
     MmsValue_setElement(origin, 0, orCat);
 
     MmsValue* orIdent;
 
-    /*TODO
+    /*FIXME
 	 * if (self->orIdent != NULL) {
         int octetStringLen = strlen(self->orIdent);
         orIdent = MmsValue_newOctetString(0, octetStringLen);

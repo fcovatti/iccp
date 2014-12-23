@@ -1668,7 +1668,7 @@ int main (int argc, char ** argv){
 	}
 #endif
 
-	//CHECK IF BACKUP ICCP IS CONFIGURED AND START IT
+	//CHECK IF BACKUP ICCP CLIENT IS CONFIGURED AND START IT
 	if(start_bkp_configuration() < 0){
 		cleanup_variables();
 		return -1;
@@ -1686,7 +1686,7 @@ int main (int argc, char ** argv){
 		}
 	}
 	
-	//INITIALIZE ICCP CONNECTIONs 
+	//INITIALIZE ICCP CONNECTIONs TO SERVERs 
 	if(connect_to_iccp_server(&conp, srv1,srv2,srv3,srv4) < 0){
 		printf("Warning, cannot connect to iccp server main\n");
 	} else{
