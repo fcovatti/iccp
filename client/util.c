@@ -298,6 +298,27 @@ int check_connection(MmsConnection con, char * id_iccp, int * loop_error) {
 }
 
 /*********************************************************************************************************/
+int connect_to_iccp_server(MmsConnection * con, char * srv_1, char *srv_2, char *srv_3, char *srv_4){
+	if ((connect_to_server(*con, srv_1) < 0)){
+		MmsConnection_destroy(*con);
+		*con = MmsConnection_create();
+		if ((connect_to_server(*con, srv_2) < 0)){
+			MmsConnection_destroy(*con);
+			*con = MmsConnection_create();
+			if ((connect_to_server(*con, srv_3) < 0)){
+				MmsConnection_destroy(*con);
+				*con = MmsConnection_create();
+				if ((connect_to_server(*con, srv_4) < 0)){
+					MmsConnection_destroy(*con);
+					*con = MmsConnection_create();
+					return -1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+/*********************************************************************************************************/
 int connect_to_server(MmsConnection con, char * server)
 {
 

@@ -158,5 +158,14 @@ typedef union {
 	char  s[4];
 } time_data;
 
+//TODO: store for each server connection the data in here
+typedef struct {
+	MmsConnection con;//connection fd
+    int enabled;//connection enabled
+    int error; //connection error
+	data_config * analog; //analog data
+	data_config * digital; //digital data
+	data_config * events;  //events
+}__attribute__((packed)) st_server_con;
 
 #endif

@@ -1356,27 +1356,6 @@ static int open_data_logs(void) {
 }
 #endif
 /*********************************************************************************************************/
-static int connect_to_iccp_server(MmsConnection * con, char * srv_1, char *srv_2, char *srv_3, char *srv_4){
-	if ((connect_to_server(*con, srv_1) < 0)){
-		MmsConnection_destroy(*con);
-		*con = MmsConnection_create();
-		if ((connect_to_server(*con, srv_2) < 0)){
-			MmsConnection_destroy(*con);
-			*con = MmsConnection_create();
-			if ((connect_to_server(*con, srv_3) < 0)){
-				MmsConnection_destroy(*con);
-				*con = MmsConnection_create();
-				if ((connect_to_server(*con, srv_4) < 0)){
-					MmsConnection_destroy(*con);
-					*con = MmsConnection_create();
-					return -1;
-				}
-			}
-		}
-	}
-	return 0;
-}
-/*********************************************************************************************************/
 static int create_ihm_comm(){
 	ihm_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
 	if(ihm_socket_send < 0){
@@ -1623,8 +1602,9 @@ static void * check_connections_thread(void * parameter)
 		} else {
 			//TODO:connect to both clients
 	/*		if(connect_to_iccp_server(&conb, srv5,srv6,srv7,srv8) == 0){
-	 			Thread_sleep(5000);
-				if((check_connection(conb,IDICCP, &conb_error)&&(start_iccp(conb)<0)){
+	 			MmsConnection_setInformationReportHandler(conb, informationReportHandler, (void *) &conb);
+	 			Thread_sleep(10000);
+				if((check_connection(conb,IDICCP, &conb_error) || (start_iccp(conb)<0)){
 					printf("could not start configuration for connection backup\n");
 					running = 0;
 				} else

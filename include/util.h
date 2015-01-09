@@ -119,6 +119,8 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp);
 
 int check_connection(MmsConnection con, char * id_iccp, int * loop_error);
 
+int connect_to_iccp_server(MmsConnection * con, char * srv_1, char *srv_2, char *srv_3, char *srv_4);
+
 int connect_to_server(MmsConnection con, char * server);
 
 int command_variable(MmsConnection con, char * varibale, int value);
