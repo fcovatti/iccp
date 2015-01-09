@@ -13,8 +13,8 @@
 #include "config.h"
 #endif 
 
-extern FILE * error_file;
-#define LOG_MESSAGE(...)	do { print_time(error_file); fprintf(error_file, __VA_ARGS__); fflush(error_file); } while(false)
+extern FILE * log_file;
+#define LOG_MESSAGE(...)	do { print_time(log_file); fprintf(log_file, __VA_ARGS__); fflush(log_file); } while(false)
 void print_time(FILE * log_file);
 
 #ifdef _WIN32

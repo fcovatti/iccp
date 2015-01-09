@@ -75,12 +75,7 @@ typedef struct {
 	char id[25];
 	char state_on[16];
 	char state_off[16];
-	char type;
-	float f;
-	unsigned char state;
-	time_t time_stamp;
-	unsigned short time_stamp_extended;
-	unsigned char not_present;
+//	char type; //FIXME not used anymore...remove
 	unsigned int num_of_msg_rcv;
 } data_config;
 
@@ -89,8 +84,8 @@ typedef struct {
 	unsigned char state;
 	time_t time_stamp;
 	unsigned short time_stamp_extended;
+	unsigned char not_present;
 } data_to_handle;
-
 
 typedef struct {
 	unsigned int nponto;
@@ -163,9 +158,9 @@ typedef struct {
 	MmsConnection con;//connection fd
     int enabled;//connection enabled
     int error; //connection error
-	data_config * analog; //analog data
-	data_config * digital; //digital data
-	data_config * events;  //events
-}__attribute__((packed)) st_server_con;
+	data_to_handle * analog; //analog data
+	data_to_handle * digital; //digital data
+	data_to_handle * events;  //events
+}__attribute__((packed)) st_server_data;
 
 #endif
