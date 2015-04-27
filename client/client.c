@@ -1681,12 +1681,12 @@ int main (int argc, char ** argv){
 	
 	//INITIALIZE ICCP CONNECTIONs TO SERVERs 
 	if(connect_to_iccp_server(&srv_main.con, srv1,srv2,srv3,srv4) < 0){
-		printf("Warning, cannot connect to iccp server main\n");
+		printf("Warning, cannot connect to iccp pool main\n");
 	} else{
 		srv_main.enabled = 1;
 	}
 	if(connect_to_iccp_server(&srv_bckp.con, srv5,srv6,srv7,srv8) < 0){
-		printf("Warning, cannot connect to iccp server backup\n");
+		printf("Warning, cannot connect to iccp pool backup\n");
 	} else {
 		srv_bckp.enabled = 1;
 	}

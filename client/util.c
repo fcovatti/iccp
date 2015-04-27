@@ -324,6 +324,11 @@ int connect_to_server(MmsConnection con, char * server)
 
 	MmsError mmsError;
 
+    if(strcmp(server,"no")==0) {
+		//FIXME dont go till here to check if server is disabled with "no"
+		return -1;
+	}
+	
 	bool indication = MmsConnection_connect(con, &mmsError, server, 102);
 	if (indication){
 		LOG_MESSAGE("Connection OK - server %s !!!\n", server);
