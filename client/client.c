@@ -51,11 +51,12 @@ static dataset_config * dataset_conf = NULL;
 static st_server_data srv_main;
 static st_server_data srv_bckp;
 
-//Variables stroing Configuration from file
+//Variables Configured on ICCP_CLIENT_CONFIG_FILE file
 static char IDICCP[MAX_ID_ICCP_NAME];
 static char srv1[MAX_STR_NAME], srv2[MAX_STR_NAME], srv3[MAX_STR_NAME], srv4[MAX_STR_NAME]; 
 static char srv5[MAX_STR_NAME], srv6[MAX_STR_NAME], srv7[MAX_STR_NAME], srv8[MAX_STR_NAME]; 
 static int integrity_time=0, analog_buf=0, digital_buf=0, events_buf=0;
+static int convert_hyphen_to_dollar=0;
 
 //Backup ICCP client variables
 static char bkp_addr[MAX_STR_NAME];
@@ -1079,9 +1080,21 @@ static int read_configuration() {
 			LOG_MESSAGE("DATASET_EVENTS_BUFFER_INTERVAL=%d\n", events_buf);
 			cfg_params++;
 		}
+		if(strcmp(config_param, "CONVERT_HYPHEN_TO_DOLLARSIGN") == 0){
+			if (strcmp(config_value, "true") == 0){
+				convert_hyphen_to_dollar = 1;
+			} else if (strcmp(config_value, "false") == 0){
+				convert_hyphen_to_dollar = 0;
+			} else {
+				LOG_MESSAGE( "ERROR - wrong parameters on %s\n",config_param);
+				return -1;
+			}
+			LOG_MESSAGE("CONVERT_HYPHEN_TO_DOLLARSIGN=%d\n", config_value);
+			cfg_params++;
+		}
 	}
 
-	if (cfg_params!=16){
+	if (cfg_params!=17){
 		LOG_MESSAGE( "ERROR - wrong number of parameters on %s\n",ICCP_CLIENT_CONFIG_FILE);
 		return -1;
 	}
@@ -1147,14 +1160,26 @@ static int read_configuration() {
 			break;
 
 		//change - for $
+		if (convert_hyphen_to_dollar){
+			for ( i=0; i <22; i++) {
+				if (id_ponto[i] == '-'){
+					id_ponto[i] = '$';
+				}
+			}
+		}
+		//change + for $
 		for ( i=0; i <22; i++) {
-			if (id_ponto[i] == '-' || id_ponto[i] == '+'){
+			if (id_ponto[i] == '+'){
 				id_ponto[i] = '$';
 			}
 		}
-	
-		//Command Digital or Analog
-		if((type == 'D'||type=='A') && origin ==7 ){
+
+	    if(origin == ORIGIN_CALC){
+			LOG_MESSAGE("INFO - Ignoring Calculate object %s\n", id_ponto);
+		}else if (origin == ORIGIN_MANUAL){
+			LOG_MESSAGE("INFO - Ignoring Manual object %s\n", id_ponto);
+		}//Command Digital or Analog
+		else if((type == 'D'||type=='A') && origin == ORIGIN_COMMAND ){
 			//add $C to the end of command
 			if (id_ponto[21] == 'K') {
 				id_ponto[22] = '$';
@@ -1222,7 +1247,7 @@ static int read_configuration() {
 			num_of_analog_ids++;
 		} //Unknown 
 		else {
-			LOG_MESSAGE("WARNING - ERROR reading configuration file! Unknown type");
+			LOG_MESSAGE("WARNING - ERROR reading configuration file! Unknown type\n");
 		}
 	}
 

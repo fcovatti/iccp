@@ -35,3 +35,5 @@ DATASET_EVENTS_BUFFER_INTERVAL="1";
 // Time in seconds for Integrity check (configured on the remote server on initialization)
 DATASET_INTEGRITY_TIME="180";
 
+// Update 23 of SAGE converts the '-' to '$' for iccp Objects
+CONVERT_HYPHEN_TO_DOLLARSIGN="false";
