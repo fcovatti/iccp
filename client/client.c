@@ -125,6 +125,12 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 		if(!srv_data->analog[offset+i].not_present){
 			srv_data->analog[offset+i].f = handle[i].f;
 			srv_data->analog[offset+i].state = handle[i].state;
+
+#ifdef HANDLE_ANALOG_DATA_DEBUG	
+			printf("%25s: %11.2f %-6s |", analog_cfg[offset+i].id, handle[i].f,analog_cfg[offset+i].state_on);
+			print_value(handle[i].state,1, handle[i].time_stamp,0, "", "");
+#endif
+
 			analog_cfg[offset+i].num_of_msg_rcv++;
 			npontos[msg_queue] = analog_cfg[offset+i].nponto;
 			values[msg_queue]= handle[i].f;
@@ -169,6 +175,12 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 			srv_data->digital[offset+i].time_stamp = handle[i].time_stamp;
 			srv_data->digital[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
 			srv_data->digital[offset+i].state = handle[i].state;
+
+#ifdef HANDLE_DIGITAL_DATA_DEBUG	
+			printf("%25s: ", digital_cfg[offset+i].id);
+			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, digital_cfg[offset+i].state_on, digital_cfg[offset+i].state_off);
+#endif
+
 			digital_cfg[offset+i].num_of_msg_rcv++;
 			npontos[msg_queue] = digital_cfg[offset+i].nponto;
 			states[msg_queue] = handle[i].state;
@@ -211,6 +223,12 @@ void handle_events_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			srv_data->events[offset+i].time_stamp = handle[i].time_stamp;
 			srv_data->events[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
 			srv_data->events[offset+i].state = handle[i].state;
+
+#ifdef HANDLE_EVENTS_DATA_DEBUG	
+			printf("%25s: ", events_cfg[offset+i].id);
+			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events_cfg[offset+i].state_on, events_cfg[offset+i].state_off);
+#endif
+
 			events_cfg[offset+i].num_of_msg_rcv++;
 			npontos[msg_queue] = events_cfg[offset+i].nponto;
 			states[msg_queue]= handle[i].state;
@@ -259,7 +277,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 		analog_cfg[index].num_of_msg_rcv++;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-		printf("%25s: %11.2f %-6s |", analog_cfg[index]->id, value,analog_cfg[index]->state_on);
+		printf("%25s: %11.2f %-6s |", analog_cfg[index].id, value,analog_cfg[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 
