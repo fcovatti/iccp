@@ -235,7 +235,7 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp)
 		LOG_MESSAGE( "ERROR - reading transfer set value 1 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	} else {
-		//printf("Read transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
+		//printd("Read transfer set domain_id: %s\n", MmsValue_toString(ts_elem));
 		if(strncmp(MmsValue_toString(ts_elem), id_iccp, sizeof(id_iccp)) != 0){
 			LOG_MESSAGE( "ERROR - Wrong domain id\n");
 			return NULL;
@@ -247,7 +247,7 @@ MmsValue * get_next_transferset(MmsConnection con, char * id_iccp)
 		LOG_MESSAGE( "ERROR - reading transfer set value 2 failed! %d\n", mmsError);                                                                                                   
 		return NULL;
 	} else {
-		//printf("Read transfer set name: %s\n", MmsValue_toString(ts_elem));
+		//printd("Read transfer set name: %s\n", MmsValue_toString(ts_elem));
 		returnValue = MmsValue_newMmsString(MmsValue_toString(ts_elem));
 	}
 	MmsValue_delete(value); 
@@ -353,7 +353,7 @@ int command_variable(MmsConnection con, char * variable, int value)
 		return -1;
 	}
 	else{
-		//printf("Read %s SBO value %d\n",variable, MmsValue_toInt32(readvalue));
+		//printd("Read %s SBO value %d\n",variable, MmsValue_toInt32(readvalue));
 		//MmsValue_setInt32(readvalue, 0);
 		MmsValue_delete(readvalue);
 		MmsValue* writeValue= MmsValue_newIntegerFromInt32(value);

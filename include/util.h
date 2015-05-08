@@ -16,6 +16,7 @@
 extern FILE * log_file;
 #define LOG_MESSAGE(...)	do { print_time(log_file); fprintf(log_file, __VA_ARGS__); fflush(log_file); } while(false)
 void print_time(FILE * log_file);
+#define printd printf
 
 #ifdef _WIN32
 #ifndef WIN32

@@ -127,7 +127,7 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			srv_data->analog[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-			printf("%25s: %11.2f %-6s |", analog_cfg[offset+i].id, handle[i].f,analog_cfg[offset+i].state_on);
+			printd("%25s: %11.2f %-6s |", analog_cfg[offset+i].id, handle[i].f,analog_cfg[offset+i].state_on);
 			print_value(handle[i].state,1, handle[i].time_stamp,0, "", "");
 #endif
 
@@ -177,7 +177,7 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 			srv_data->digital[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
-			printf("%25s: ", digital_cfg[offset+i].id);
+			printd("%25s: ", digital_cfg[offset+i].id);
 			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, digital_cfg[offset+i].state_on, digital_cfg[offset+i].state_off);
 #endif
 
@@ -225,7 +225,7 @@ void handle_events_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			srv_data->events[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
-			printf("%25s: ", events_cfg[offset+i].id);
+			printd("%25s: ", events_cfg[offset+i].id);
 			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events_cfg[offset+i].state_on, events_cfg[offset+i].state_off);
 #endif
 
@@ -277,7 +277,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 		analog_cfg[index].num_of_msg_rcv++;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-		printf("%25s: %11.2f %-6s |", analog_cfg[index].id, value,analog_cfg[index].state_on);
+		printd("%25s: %11.2f %-6s |", analog_cfg[index].id, value,analog_cfg[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 
@@ -324,13 +324,13 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 
 #ifdef DEBUG_DIGITAL_REPORTS	
 		if(!(state&0x01)){
-			printf("%25s: ", digital_cfg[index].id);
+			printd("%25s: ", digital_cfg[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
 		}
 #endif
 
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
-		printf("%25s: ", digital_cfg[index].id);
+		printd("%25s: ", digital_cfg[index].id);
 		print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
@@ -386,13 +386,13 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 
 #ifdef DEBUG_EVENTS_REPORTS	
 		if(!(state&0x01)){
-			printf("%25s: ", events_cfg[index].id);
+			printd("%25s: ", events_cfg[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
 		}
 #endif
 
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
-		printf("%25s: ", events_cfg[index].id);
+		printd("%25s: ", events_cfg[index].id);
 		print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
@@ -462,9 +462,9 @@ static int read_dataset(st_server_data * srv_data, char * ds_name, unsigned int 
 			memset(debug_read,0,50);
 			MmsValue_printToBuffer(dataSetValue, debug_read, 50);
 			for (debug_i=0;debug_i<50; debug_i++){
-				printf("%X", debug_read[debug_i]);
+				printd("%X", debug_read[debug_i]);
 			}
-			printf("\n");
+			printd("\n");
 #endif			
 			if(dataSetValue == NULL) {
 				LOG_MESSAGE( "ERROR - could not get DATASET values offset %d element %d %d \n",offset, idx, number_of_variables);
@@ -650,7 +650,7 @@ static void create_dataset(MmsConnection con, char * ds_name, int offset)
 
 
 	}else {
-		printf("ERROR creating unknown dataset\n");
+		LOG_MESSAGE("ERROR creating unknown dataset\n");
 	}
 
 	MmsConnection_defineNamedVariableList(con, &mmsError, IDICCP, ds_name, variables); 
@@ -735,9 +735,9 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 							//DEBUG BUFFER
 							  /* int j;
 							   for (j=0; j < dataSetValue->value.octetString.size; j ++){
-							   printf(" %x", dataSetValue->value.octetString.buf[j]);
+							   printd(" %x", dataSetValue->value.octetString.buf[j]);
 							   }
-							   printf("\n"); */
+							   printd("\n"); */
 
 							//RULE 0
 							//first byte is the rule
@@ -804,7 +804,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 												}else if	(dataSetValue->value.octetString.buf[octet_offset+6] == 0x71){
 													offset_size=RULE0_DIGITAL_REPORT_SIZE;//FIXME: for analog non existent objects the size is 7 and not threated when 0x53F3xxyy000071
 												}else{
-													printf("not present %d - %x %x %x %x %x %x %x\n",analog_cfg[index+dataset_conf[offset].offset].nponto
+													LOG_MESSAGE("not present %d - %x %x %x %x %x %x %x\n",analog_cfg[index+dataset_conf[offset].offset].nponto
 															,dataSetValue->value.octetString.buf[octet_offset+0]
 															,dataSetValue->value.octetString.buf[octet_offset+1]
 															,dataSetValue->value.octetString.buf[octet_offset+2]
@@ -949,6 +949,33 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 	}
 }
 /*********************************************************************************************************/
+static int open_log_file(){
+	/*****************
+	 * OPEN LOG FILES
+	 * **********/
+	time_t t = time(NULL);
+	struct tm now = *localtime(&t); 
+	char flog[MAX_STR_NAME];
+
+#ifdef WIN32
+#ifdef WINE_TESTING
+	snprintf(flog,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#else
+	snprintf(flog,MAX_STR_NAME, "..\\logs\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#endif
+#else
+	snprintf(flog,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
+#endif
+
+	log_file = fopen(flog, "w");
+	if(log_file==NULL){
+		printf("Error, cannot open log file %s\n",flog);
+		fclose(log_file);
+		return -1;
+	}
+	return 0;
+}
+/*********************************************************************************************************/
 static int read_configuration() {
 	FILE * file = NULL;
 	char line[300];
@@ -963,34 +990,10 @@ static int read_configuration() {
 	char type = 0;
 	int i;
 	const char *str1;
-	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME], error_log[MAX_STR_NAME];
+	char id_iccp[MAX_STR_NAME], cfg_file[MAX_STR_NAME];
 	char config_param[MAX_STR_NAME], config_value[MAX_STR_NAME];
 	int cfg_params = 0;
 
-	/*****************
-	 * OPEN LOG FILES
-	 * **********/
-
-	// OPEN ERROR LOG
-	time_t t = time(NULL);
-	struct tm now = *localtime(&t); 
-
-#ifdef WIN32
-#ifdef WINE_TESTING
-	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
-#else
-	snprintf(error_log,MAX_STR_NAME, "..\\logs\\iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
-#endif
-#else
-	snprintf(error_log,MAX_STR_NAME, "/tmp/iccp_info-%04d%02d%02d%02d%02d.log", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min);
-#endif
-
-	log_file = fopen(error_log, "w");
-	if(log_file==NULL){
-		printf("Error, cannot open log file %s\n",error_log);
-		fclose(log_file);
-		return -1;
-	}
 
 	/*****************
 	 * READ ICCP CONFIGURATION PARAMETERS
@@ -1343,7 +1346,7 @@ static void cleanup_variables()
 	MmsConnection_destroy(srv_main.con);
 	MmsConnection_destroy(srv_bckp.con);
 
-	printf("cleanning up variables\n");
+	LOG_MESSAGE("cleanning up variables\n");
 
 #ifdef LOG_COUNTERS
 	LOG_MESSAGE( "***************ANALOG***********************\n");
@@ -1363,9 +1366,9 @@ static void cleanup_variables()
 	for (i=0; i < num_of_event_ids; i++) {
 		LOG_MESSAGE( "%7d %6d %6d %7d \t%s\t \n",((i+1)/DATASET_MAX_SIZE),i, events_cfg[i].nponto, events_cfg[i].num_of_msg_rcv, events_cfg[i].id);
 	}
-#endif
-	printf("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
+	LOG_MESSAGE("Total Sent %d - A:%d D:%d E:%d\n", (digital_msgs+analog_msgs+events_msgs),
 				 analog_msgs, digital_msgs, events_msgs);
+#endif
 #ifdef DATA_LOG
 	fclose(data_file_analog);
 	fclose(data_file_digital);
@@ -1396,17 +1399,17 @@ static void cleanup_variables()
 static int open_data_logs(void) {
 	data_file_analog = fopen(DATA_ANALOG_LOG, "w");
 	if(data_file_analog==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_ANALOG_LOG);
+		LOG_MESSAGE("Error, cannot open configuration data log file %s\n", DATA_ANALOG_LOG);
 		return -1;
 	}
 	data_file_digital = fopen(DATA_DIGITAL_LOG, "w");
 	if(data_file_digital==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_DIGITAL_LOG);
+		LOG_MESSAGE("Error, cannot open configuration data log file %s\n", DATA_DIGITAL_LOG);
 		return -1;
 	}
 	data_file_events = fopen(DATA_EVENTS_LOG, "w");
 	if(data_file_events==NULL){
-		printf("Error, cannot open configuration data log file %s\n", DATA_EVENTS_LOG);
+		LOG_MESSAGE("Error, cannot open configuration data log file %s\n", DATA_EVENTS_LOG);
 		return -1;
 	}
 	return 0;
@@ -1417,18 +1420,18 @@ static int open_data_logs(void) {
 static int create_ihm_comm(){
 	ihm_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
 	if(ihm_socket_send < 0){
-		printf("could not create UDP socket to trasmit to IHM\n");
+		LOG_MESSAGE("could not create UDP socket to trasmit to IHM\n");
 		return -1;
 	}	
-	printf("Created UDP socket %d for IHM %s Port %d\n",ihm_socket_send, ihm_addr, PORT_IHM_TRANSMIT);
+	LOG_MESSAGE("Created UDP socket %d for IHM %s Port %d\n",ihm_socket_send, ihm_addr, PORT_IHM_TRANSMIT);
 
 	ihm_socket_receive = prepare_Wait(PORT_IHM_LISTEN);
 	if(ihm_socket_receive < 0){
-		printf("could not create UDP socket to listen to IHM\n");
+		LOG_MESSAGE("could not create UDP socket to listen to IHM\n");
 		close(ihm_socket_send);
 		return -1;
 	}
-	printf("Created UDP local socket %d for IHM Port %d\n",ihm_socket_receive,PORT_IHM_LISTEN);
+	LOG_MESSAGE("Created UDP local socket %d for IHM Port %d\n",ihm_socket_receive,PORT_IHM_LISTEN);
 	return 0;
 }
 /*********************************************************************************************************/
@@ -1436,14 +1439,14 @@ static int create_bkp_comm(){
 
 	bkp_socket = prepare_Wait(PORT_ICCP_BACKUP);
 	if(bkp_socket < 0){
-		printf("could not create UDP socket to listen to Backup ICCP Client\n");
+		LOG_MESSAGE("could not create UDP socket to listen to Backup ICCP Client\n");
 		return -1;
 	}
 	if(prepareServerAddress(bkp_addr, PORT_ICCP_BACKUP, &bkp_sock_addr) < 0){
-	  	printf("error preparing ICCP backup address\n");
+	  	LOG_MESSAGE("error preparing ICCP backup address\n");
 	  	return -1;
 	}
-	printf("Created UDP socket %d for ICCP Bakcup Port %d\n",bkp_socket,PORT_ICCP_BACKUP);
+	LOG_MESSAGE("Created UDP socket %d for ICCP Bakcup Port %d\n",bkp_socket,PORT_ICCP_BACKUP);
 	return 0;
 }
 /*********************************************************************************************************/
@@ -1503,7 +1506,7 @@ static void check_commands(){
 /*********************************************************************************************************/
 static void * check_bkp_thread(void * parameter)
 {
-	printf("Backup Thread Started\n");
+	LOG_MESSAGE("Backup Thread Started\n");
 	static int counter;
 	while(running){
 		if(check_backup(2000) == 0){
@@ -1521,14 +1524,14 @@ static void * check_bkp_thread(void * parameter)
 /*********************************************************************************************************/
 int start_bkp_configuration(void){
 	if(strcmp(bkp_addr,"no")==0) {
-		printf("no iccp client backup configured\n");
+		LOG_MESSAGE("no iccp client backup configured\n");
 		bkp_present=0;
 	}else{
 		bkp_enabled=1;
 		bkp_present=10;
-		printf("bkp enabled\n");
+		LOG_MESSAGE("bkp enabled\n");
 		if(create_bkp_comm() < 0){
-			printf("Error, cannot open communication to bkp server\n");
+			LOG_MESSAGE("Error, cannot open communication to bkp server\n");
 			return -1;
 		}
 		while (running && bkp_present){
@@ -1556,7 +1559,7 @@ int start_bkp_configuration(void){
 		bkp_thread = Thread_create(check_bkp_thread, NULL, false);
 		Thread_start(bkp_thread);
 
-		printf("Backup client not alive\n");
+		LOG_MESSAGE("Backup client not alive\n");
 	}
 	return 0;
 }
@@ -1565,42 +1568,41 @@ static int start_iccp(st_server_data * srv_data){
 	int i;
 	MmsError mmsError;
 // DELETE DATASETS WHICH WILL BE USED
-	printf("deleting data sets     ");
+	LOG_MESSAGE("deleting data sets (dds)!\n");
 	for (i=0; i < num_of_datasets; i++) {
 		fflush(stdout);
 		MmsConnection_deleteNamedVariableList(srv_data->con,&mmsError, IDICCP, dataset_conf[i].id);
-		printf(".");
+		LOG_MESSAGE("dds = %d %\n", (i*100)/num_of_datasets );
 	}
-	printf("\n");
+	LOG_MESSAGE("dds = %d %\n", (i*100)/num_of_datasets );
 
 	// CREATE TRASNFERSETS ON REMOTE SERVER	
-	printf("creating transfer sets ");
+	LOG_MESSAGE("creating transfer sets (cts)!\n");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		MmsValue *transfer_set_dig  = get_next_transferset(srv_data->con,IDICCP);
 		if( transfer_set_dig == NULL) {	
-			printf("\nCould not create transfer set for digital data\n");
+			LOG_MESSAGE("Could not create transfer set for digital data\n");
 			return -1;
 		} else {
 			strncpy(dataset_conf[i].ts, MmsValue_toString(transfer_set_dig), TRANSFERSET_NAME_SIZE);
 			MmsValue_delete(transfer_set_dig);
 		}
-		printf(".");
+		LOG_MESSAGE("cts = %d %\n", (i*100)/num_of_datasets );
 	}	
-	printf("\n");
+	LOG_MESSAGE("cts = %d %\n", (i*100)/num_of_datasets );
 
 	// CREATE DATASETS WITH CUSTOM VARIABLES
-	printf("creating data sets     ");
+	LOG_MESSAGE("creating data sets (cds)!\n");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		create_dataset(srv_data->con, dataset_conf[i].id,i);
-		printf(".");
+		LOG_MESSAGE("cds = %d %\n", (i*100)/num_of_datasets );
 	}
-	printf("\n");
+	LOG_MESSAGE("cds = %d %\n", (i*100)/num_of_datasets );
 
-		
 	// WRITE DATASETS TO TRANSFERSET
-	printf("Write/Read data sets   ");
+	LOG_MESSAGE("Write/Read data sets (wrds)\n");
 	for (i=0; i < num_of_datasets; i++){
 		fflush(stdout);
 		
@@ -1620,20 +1622,20 @@ static int start_iccp(st_server_data * srv_data){
 				return -1;
 		}
 		else{
-			printf("\nunknown write dataset type\n");
+			LOG_MESSAGE("unknown write dataset type\n");
 			return -1;
 		}
 		Thread_sleep(1100);//sleep 1.1s for different report times (better handling)
-		printf(".");
+		LOG_MESSAGE("wrds = %d %\n", (i*100)/num_of_datasets );
 	}
-	printf("\n");
+	LOG_MESSAGE("wrds = %d %\n", (i*100)/num_of_datasets );
 
 	return 0;
 }
 /*********************************************************************************************************/
 static void * check_connections_thread(void * parameter)
 {
-	printf("Connections Thread Started\n");
+	LOG_MESSAGE("Connections Thread Started\n");
 	//if connection not enabled or lost, restart all
 	while(running){
 		if (srv_main.enabled){
@@ -1645,7 +1647,7 @@ static void * check_connections_thread(void * parameter)
 				MmsConnection_setInformationReportHandler(srv_main.con, informationReportHandler, (void *) &srv_main);
 				Thread_sleep(10000);
 				if((check_connection(srv_main.con,IDICCP, &srv_main.error) < 0) || (start_iccp(&srv_main)<0)){
-					printf("could not start configuration for connection principal\n");
+					LOG_MESSAGE("could not start configuration for connection principal\n");
 					running = 0;
 				} else{
 					srv_main.enabled=1;
@@ -1662,7 +1664,7 @@ static void * check_connections_thread(void * parameter)
 	 			MmsConnection_setInformationReportHandler(srv_bckp.con, informationReportHandler, (void *) &srv_bckp);
 	 			Thread_sleep(10000);
 				if((check_connection(srv_bckp.con,IDICCP, &srv_bckp.error) < 0) || (start_iccp(&srv_bckp)<0)){
-					printf("could not start configuration for connection backup\n");
+					LOG_MESSAGE("could not start configuration for connection backup\n");
 					running = 0;
 				} else
 					srv_bckp.enabled=1;
@@ -1685,20 +1687,25 @@ int main (int argc, char ** argv){
     digital_mutex = Semaphore_create(1); //semaphore
     localtime_mutex = Semaphore_create(1); //semaphore
 
-	
-	// READ CONFIGURATION FILE
-	if (read_configuration() != 0) {
-		printf("Error reading configuration\n");
+	// OPEN LOG FILE
+	if (open_log_file() != 0) {
+		printf("Error opening log file\n");
 		return -1;
-	} else {
-		printf("Start configuration with:\n  %d analog, %d digital, %d events, %d commands\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands);
-		printf("  %d datasets:\n   - %d analog\n   - %d digital \n   - %d events \n", num_of_datasets, num_of_analog_datasets, num_of_digital_datasets, num_of_event_datasets);
 	}
 
-	// OPEN DATA LOG FILES	
+	// READ CONFIGURATION FILE
+	if (read_configuration() != 0) {
+		LOG_MESSAGE("Error reading configuration\n");
+		return -1;
+	} else {
+		LOG_MESSAGE("Start configuration with:\n  %d analog, %d digital, %d events, %d commands\n", num_of_analog_ids, num_of_digital_ids, num_of_event_ids, num_of_commands);
+		LOG_MESSAGE("  %d datasets:\n   - %d analog\n   - %d digital \n   - %d events \n", num_of_datasets, num_of_analog_datasets, num_of_digital_datasets, num_of_event_datasets);
+	}
+
 #ifdef DATA_LOG
+	// OPEN DATA LOG FILES	
 	if(open_data_logs()<0) {
-		printf("Error, cannot open configuration data log files\n");
+		LOG_MESSAGE("Error, cannot open configuration data log files\n");
 		cleanup_variables();
 		return -1;
 	}
@@ -1712,11 +1719,11 @@ int main (int argc, char ** argv){
 			
 	//INITIALIZE IHM CONNECTION 
 	if(strcmp(ihm_addr,"no")==0) {
-		printf("no ihm configured\n");
+		LOG_MESSAGE("no ihm configured\n");
 	}else{
 		ihm_enabled=1;
 		if(create_ihm_comm() < 0){
-			printf("Error, cannot open communication to ihm server\n");
+			LOG_MESSAGE("Error, cannot open communication to ihm server\n");
 			cleanup_variables();
 			return -1;
 		}
@@ -1724,18 +1731,18 @@ int main (int argc, char ** argv){
 	
 	//INITIALIZE ICCP CONNECTIONs TO SERVERs 
 	if(connect_to_iccp_server(&srv_main.con, srv1,srv2,srv3,srv4) < 0){
-		printf("Warning, cannot connect to iccp pool main\n");
+		LOG_MESSAGE("Warning, cannot connect to iccp pool main\n");
 	} else{
 		srv_main.enabled = 1;
 	}
 	if(connect_to_iccp_server(&srv_bckp.con, srv5,srv6,srv7,srv8) < 0){
-		printf("Warning, cannot connect to iccp pool backup\n");
+		LOG_MESSAGE("Warning, cannot connect to iccp pool backup\n");
 	} else {
 		srv_bckp.enabled = 1;
 	}
 	
 	if(!srv_main.enabled && !srv_bckp.enabled){
-		printf("Error,Could not connect to any iccp servers\n");
+		LOG_MESSAGE("Error,Could not connect to any iccp servers\n");
 	}
 	
 	// HANDLE REPORTS
@@ -1745,19 +1752,19 @@ int main (int argc, char ** argv){
 	//START ICCP CONFIGURATION
 	if(srv_main.enabled){
 	   if(start_iccp(&srv_main)<0){
-			printf("could not start configuration for connection principal\n");
+			LOG_MESSAGE("could not start configuration for connection principal\n");
 	   }
 	}
 	if(srv_bckp.enabled){
 	   if(start_iccp(&srv_bckp)<0){
-			printf("could not start configuration for connection backup\n");
+			LOG_MESSAGE("could not start configuration for connection backup\n");
 	   }
 	}
 		
 	connections_thread = Thread_create(check_connections_thread, NULL, false);
 	Thread_start(connections_thread);
 	
-	printf("ICCP Process Successfully Started!\n");
+	LOG_MESSAGE("ICCP Process Successfully Started!\n");
 
 	// LOOP TO MANTAIN CONNECTION ACTIVE AND CHECK COMMANDS	
 	while(running) {

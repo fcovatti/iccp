@@ -6,7 +6,7 @@ IDICCP="HIS";
 // Servers 5 to 6 Backup ICCP Servers IPs
 // EX: srv1/srv2 IPs ems1, srv3/srv4 IPs ems2, srv5/srv6 IPs ems3, srv7/srv8 IPs ems3
 // Currently servers 5 to 8 don't work
-SERVER_NAME_1="10.63.5.44";
+SERVER_NAME_1="10.63.5.41";
 SERVER_NAME_2="no";
 SERVER_NAME_3="no";
 SERVER_NAME_4="no";
@@ -36,4 +36,4 @@ DATASET_EVENTS_BUFFER_INTERVAL="1";
 DATASET_INTEGRITY_TIME="180";
 
 // Update 23 of SAGE converts the '-' to '$' for iccp Objects
-CONVERT_HYPHEN_TO_DOLLARSIGN="false";
+CONVERT_HYPHEN_TO_DOLLARSIGN="true";

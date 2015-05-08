@@ -15,6 +15,9 @@
 
 extern Semaphore localtime_mutex;
 
+extern FILE * log_file;
+#define LOG_MESSAGE(...)	do { print_time(log_file); fprintf(log_file, __VA_ARGS__); fflush(log_file); } while(false)
+void print_time(FILE * log_file);
 #ifdef WIN32
 
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
@@ -42,26 +45,26 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 	int buf_size = 163840;
 
 	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
-		printf("winsock error: code %i\n");
+		LOG_MESSAGE("winsock error: code %i\n");
 		return -1;
 	}
 
 	if (prepareServerAddress(addr, port, server_addr) < 0){
-	  	printf("error preparing address\n");
+	  	LOG_MESSAGE("error preparing address\n");
 	  	return -1;
 	}
 
 	listen_socket = socket(AF_INET, SOCK_DGRAM,IPPROTO_UDP);
 
 	if (listen_socket == INVALID_SOCKET) {
-		printf("socket failed with error: %i\n", WSAGetLastError());
+		LOG_MESSAGE("socket failed with error: %i\n", WSAGetLastError());
 		WSACleanup();
 		return -1;
 	}
 	
 	optlen = sizeof(int);
 	getsockopt(listen_socket,SOL_SOCKET, SO_SNDBUF, (char *) &buf_size, &optlen);
-	printf("socket size %d\n", buf_size);
+	LOG_MESSAGE("socket size %d\n", buf_size);
 
 	setsockopt(listen_socket,SOL_SOCKET, SO_SNDBUF, (char *) &buf_size, optlen);
 	setsockopt(listen_socket,SOL_SOCKET, SO_RCVBUF, (char *) &buf_size, optlen);
@@ -72,10 +75,10 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr){
 /*********************************************************************************************************/
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr){
 #ifdef DEBUG_MSGS
-	printf("Sending message size %d\n", msg_size);
+	printd("Sending message size %d\n", msg_size);
 #endif
 	if (sendto(socketfd, msg, msg_size, 0, (struct sockaddr*)server_addr, sizeof(struct sockaddr)) == SOCKET_ERROR) {
-		fprintf(stderr, "Error sending msg to IHM!\r\n");
+		LOG_MESSAGE("Error sending msg to IHM!\r\n");
 		return -1;
 	}
 	return 0;
@@ -97,7 +100,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 
 	/*1) Create a UDP socket*/
 	if ( (socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
-		fprintf(stderr, "Error creating udp socket. Aborting!\r\n");
+		LOG_MESSAGE("Error creating udp socket. Aborting!\r\n");
 		return -1;
 	}
 
@@ -109,14 +112,14 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 
 		if (server == NULL){
 		 	close(socketfd);
-			fprintf(stderr, "Error finding server name %s\r\n", addr);
+			LOG_MESSAGE("Error finding server name %s\r\n", addr);
 			return -1;
 		}
 
 		memcpy((char *) &server_addr->sin_addr.s_addr, (char *) server->h_addr, server->h_length);
 	}
 	else {
-		printf("null address\n");
+		LOG_MESSAGE("null address\n");
 		server_addr->sin_addr.s_addr = htonl(INADDR_ANY);
 	}
 
@@ -124,7 +127,7 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 	server_addr->sin_port = htons(port);
 	
 #ifdef DEBUG_MSGS
-	printf("socket created %d - addr %s, port %d\n",socketfd, addr, port);
+	printd("socket created %d - addr %s, port %d\n",socketfd, addr, port);
 #endif
 	return socketfd;
 }
@@ -132,10 +135,10 @@ int prepare_Send(char * addr, int port, struct sockaddr_in * server_addr)
 int SendT(int socketfd, void * msg, int msg_size, struct sockaddr_in * server_addr) {
 	/*2) Establish connection*/
 #ifdef DEBUG_MSGS
-	printf("Sending message size %d to %d:%d\n", msg_size,server_addr->sin_port,server_addr->sin_addr.s_addr);
+	printd("Sending message size %d to %d:%d\n", msg_size,server_addr->sin_port,server_addr->sin_addr.s_addr);
 #endif
 	if (sendto(socketfd, msg, msg_size, 0, (const struct sockaddr *)server_addr, sizeof(struct sockaddr)) < 0) {
-		fprintf(stderr, "Error sending msg to IHM!\r\n");
+		LOG_MESSAGE("Error sending msg to IHM!\r\n");
 		return -1;
 	}
 
@@ -155,14 +158,14 @@ int prepare_Wait(int port)
 	WSADATA wsa;
 
 	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
-		printf("winsock error: code %i\n");
+		LOG_MESSAGE("winsock error: code %i\n");
 		return -1;
 	}
 #endif
 
 	/*Create a UDP socket for incoming connections*/
 	if ( (socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) ) < 0 ) {
-		printf("Error creating a udp socket port %d!\n", port);
+		LOG_MESSAGE("Error creating a udp socket port %d!\n", port);
 		return -1;
 	}
 
@@ -177,7 +180,7 @@ int prepare_Wait(int port)
 	/* 2) Assign a port to a socket(bind)*/
 	if (bind(socketfd, (const struct sockaddr *)&servSock, sizeof(servSock) ) < 0) {
 		close(socketfd);
-		fprintf(stderr, "Error on bind port %d.. %s\r\n", port, strerror(errno));
+		LOG_MESSAGE("Error on bind port %d.. %s\r\n", port, strerror(errno));
 #ifdef WIN32
 		WSACleanup();
 #endif
@@ -188,7 +191,7 @@ int prepare_Wait(int port)
 	BOOL bNewBehavior = FALSE;
 	DWORD dwBytesReturned =0;
 	if(WSAIoctl(socketfd, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL) == SOCKET_ERROR){
-		printf("error set behavior socket win32\n");
+		LOG_MESSAGE("error set behavior socket win32\n");
 	}
 #endif
 	return socketfd;
@@ -211,7 +214,7 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 	else
 		ret = select(socketfd + 1, &readfds, NULL, NULL, NULL);
 	if (ret < 0) {
-		printf("select error socket %d\n", socketfd);
+		LOG_MESSAGE("select error socket %d\n", socketfd);
 		return NULL;
 	} else if (ret == 0) {
 		return NULL;
@@ -222,9 +225,9 @@ void * WaitT(unsigned int socketfd, int timeout_ms) {
 		buf = malloc(2000);
 		n = recv(socketfd, buf, 2000, 0);
 		if (n < 0) {
-			printf("ERROR reading from socket %d %d\n", socketfd, n);
+			LOG_MESSAGE("ERROR reading from socket %d %d\n", socketfd, n);
 #ifdef WIN32
-				printf("error %d\n", WSAGetLastError());
+				LOG_MESSAGE("error %d\n", WSAGetLastError());
 #endif
 			free(buf);
 			return NULL;
@@ -243,7 +246,7 @@ int prepareServerAddress(char* address, int port, struct sockaddr_in * server_ad
 		server = gethostbyname(address);
 
 		if (server == NULL) {
-			printf("could not find server host by name %s\n", address);
+			LOG_MESSAGE("could not find server host by name %s\n", address);
 			return -1;
 		}
 
@@ -306,7 +309,7 @@ int send_analog_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,
 	int i, offset;
 	
 	if(list_size > MAX_MSGS_SQ_ANALOG){
-		printf("wrong analog size list\n");
+		LOG_MESSAGE("wrong analog size list\n");
 		return -1;
 	}
 	memset(&msg_sup, 0, sizeof(t_msgsupsq));
@@ -382,7 +385,7 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 		//
 		Semaphore_wait(localtime_mutex);	
 		if(localtime_r(&time_stamp, &time_result) == 0){
-			printf("error obtaining localtime nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
+			LOG_MESSAGE("error obtaining localtime nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
 		}
 		Semaphore_post(localtime_mutex);	
 
@@ -399,7 +402,7 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 		msg_sup.tipo=1;
 		if(report){
 			msg_sup.causa=3; //report
-			printf("report with invalid timestamp nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
+			LOG_MESSAGE("report with invalid timestamp nponto %d, time_stamp %d, extended %d \n", nponto, time_stamp, time_stamp_extended);
 		}else
 			msg_sup.causa=20; //integrity
 		msg_sup.taminfo=sizeof(digital_seq);
@@ -418,7 +421,7 @@ int send_digital_list_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr
 	int i, offset;
 	
 	if(list_size > MAX_MSGS_SQ_DIGITAL){
-		printf("wrong digital size list\n");
+		LOG_MESSAGE("wrong digital size list\n");
 		return -1;
 	}
 
