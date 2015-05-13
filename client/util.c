@@ -171,8 +171,12 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 
 	// 6
 	elem = MmsValue_getElement(dataset, 6);
-	MmsValue_setBitStringBit(elem, 1, true);
-	MmsValue_setBitStringBit(elem, 2, true);
+
+	if(all_changes_reported&REPORT_INTERVAL_TIMEOUT) //FIXME: events are sent only spontaneusly not in GI
+		MmsValue_setBitStringBit(elem, 1, true);
+	
+	if(all_changes_reported&REPORT_OBJECT_CHANGES) 
+		MmsValue_setBitStringBit(elem, 2, true);
 
 	//7
 	elem = MmsValue_getElement(dataset, 7);
@@ -190,10 +194,10 @@ void write_dataset(MmsConnection con, char * id_iccp, char * ds_name, char * ts_
 	//RBE?
 	//FIXME: if true send notification if lost event
 	elem = MmsValue_getElement(dataset, 10);
-	if(all_changes_reported)
-		MmsValue_setBoolean(elem, true);
-	else
+	if(all_changes_reported&REPORT_BUFFERED)
 		MmsValue_setBoolean(elem, false);
+	else
+		MmsValue_setBoolean(elem, true);
 	//MmsValue_setBoolean(elem, true);
 
 	//11

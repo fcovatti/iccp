@@ -120,7 +120,6 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 	memset(states, 0, MAX_MSGS_GI_ANALOG*sizeof(unsigned char));
 
 	offset = dataset_conf[dataset].offset;
-
 	for(i=0;i<dataset_conf[dataset].size;i++){
 		if(!srv_data->analog[offset+i].not_present){
 			srv_data->analog[offset+i].f = handle[i].f;
@@ -386,7 +385,7 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 
 #ifdef DEBUG_EVENTS_REPORTS	
 		if(!(state&0x01)){
-			printd("%25s: ", events_cfg[index].id);
+			printd("(Report)%25s: ", events_cfg[index].id);
 			print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
 		}
 #endif
@@ -566,7 +565,7 @@ static int read_dataset(st_server_data * srv_data, char * ds_name, unsigned int 
 		if(dataset_conf[offset].type == DATASET_DIGITAL){
 			handle_digital_integrity(srv_data,offset, handle);
 		} else if(dataset_conf[offset].type == DATASET_EVENTS){
-			handle_events_integrity(srv_data,offset, handle);
+			//handle_events_integrity(srv_data,offset, handle); FIXME:do something else with read_dataset of events
 		} else if(dataset_conf[offset].type == DATASET_ANALOG){
 			handle_analog_integrity(srv_data,offset, handle);
 		} else {
@@ -840,7 +839,8 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								if(dataset_conf[offset].type == DATASET_DIGITAL){
 									handle_digital_integrity(srv_data,offset, handle);
 								} else if(dataset_conf[offset].type == DATASET_EVENTS){
-									handle_events_integrity(srv_data,offset, handle);
+									//handle_events_integrity(srv_data,offset, handle);FIXME:do something else with GI events
+									LOG_MESSAGE( "ERROR - events integrity are disabled dataset %d rule 0 \n", offset);
 								} else if(dataset_conf[offset].type == DATASET_ANALOG){
 									handle_analog_integrity(srv_data,offset, handle);
 								} else {
@@ -1607,17 +1607,17 @@ static int start_iccp(st_server_data * srv_data){
 		fflush(stdout);
 		
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
-			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, 0);
+			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES|REPORT_BUFFERED);
 			if(read_dataset(srv_data, dataset_conf[i].id, i) < 0)
 				return -1;
 		}
 		else if(dataset_conf[i].type == DATASET_DIGITAL){
-			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf,integrity_time, 1);
+			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, digital_buf,integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES);
 			if(read_dataset(srv_data, dataset_conf[i].id, i) < 0)
 				return -1;
 		}
 		else if(dataset_conf[i].type == DATASET_EVENTS){
-			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, integrity_time, 1);
+			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, events_buf, integrity_time, REPORT_OBJECT_CHANGES); //FIXME
 			if(read_dataset(srv_data, dataset_conf[i].id, i) < 0)
 				return -1;
 		}

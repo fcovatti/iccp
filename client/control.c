@@ -1,6 +1,7 @@
 #include "control.h"
 #include <stdio.h>
 #include "mms_value_internal.h"
+#include "util.h"
 
 #define DEBUG_IED_CLIENT 1
 static MmsValue*
@@ -72,7 +73,7 @@ ControlObjectClient_select(char * objectReference, MmsConnection con)
     strncat(itemId, "$SBO", 129);
 
     if (DEBUG_IED_CLIENT)
-        printf("IED_CLIENT: select: %s/%s\n", domainId, itemId);
+        LOG_MESSAGE("IED_CLIENT: select: %s/%s\n", domainId, itemId);
 
     MmsError mmsError;
 
@@ -83,7 +84,7 @@ ControlObjectClient_select(char * objectReference, MmsConnection con)
 
     if (value == NULL) {
         if (DEBUG_IED_CLIENT)
-            printf("IED_CLIENT: select: read SBO failed!\n");
+            LOG_MESSAGE("IED_CLIENT: select: read SBO failed!\n");
         return false;
     }
 
@@ -94,21 +95,21 @@ ControlObjectClient_select(char * objectReference, MmsConnection con)
     if (MmsValue_getType(value) == MMS_VISIBLE_STRING) {
         if (strcmp(MmsValue_toString(value),  "") == 0) {
             if (DEBUG_IED_CLIENT)
-                printf("select-response-\n");
+                LOG_MESSAGE("select-response-\n");
         }
         else if (strcmp(MmsValue_toString(value), sboReference)) {
             if (DEBUG_IED_CLIENT)
-                printf("select-response+: (%s)\n", MmsValue_toString(value));
+                LOG_MESSAGE("select-response+: (%s)\n", MmsValue_toString(value));
             selected = true;
         }
         else {
             if (DEBUG_IED_CLIENT)
-                printf("IED_CLIENT: select-response: (%s)\n", MmsValue_toString(value));
+                LOG_MESSAGE("IED_CLIENT: select-response: (%s)\n", MmsValue_toString(value));
         }
     }
     else {
         if (DEBUG_IED_CLIENT)
-            printf("IED_CLIENT: select: unexpected response from server!\n");
+            LOG_MESSAGE("IED_CLIENT: select: unexpected response from server!\n");
     }
 
     MmsValue_delete(value);
@@ -164,7 +165,7 @@ ControlObjectClient_operate(char * objectReference, MmsConnection con, MmsValue*
     strncat(itemId, "$Oper", 129);
 
     if (DEBUG_IED_CLIENT)
-        printf("IED_CLIENT: operate: %s/%s\n", domainId, itemId);
+        LOG_MESSAGE("IED_CLIENT: operate: %s/%s\n", domainId, itemId);
 
     MmsError mmsError;
 
@@ -176,7 +177,7 @@ ControlObjectClient_operate(char * objectReference, MmsConnection con, MmsValue*
 
     if (mmsError != MMS_ERROR_NONE) {
         if (DEBUG_IED_CLIENT)
-            printf("IED_CLIENT: operate failed!\n");
+            LOG_MESSAGE("IED_CLIENT: operate failed!\n");
         return false;
     }
 

@@ -75,6 +75,11 @@
 #define ORIGIN_MANUAL 6
 #define ORIGIN_COMMAND 7
 
+//Report Handlings
+#define REPORT_BUFFERED		0x01		//RBE flag, buffer reports
+#define REPORT_INTERVAL_TIMEOUT 0x02    // send "General interrogations"
+#define REPORT_OBJECT_CHANGES	0x04    // send reports
+
 typedef struct {
 	unsigned int nponto;
 	char id[25];
