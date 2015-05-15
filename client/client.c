@@ -211,47 +211,18 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 /*********************************************************************************************************/
 void handle_events_integrity(st_server_data *srv_data, int dataset, data_to_handle * handle){
 	int i, offset,  msg_queue =0;
-	unsigned int npontos[MAX_MSGS_GI_DIGITAL]={0};
-	unsigned char states[MAX_MSGS_GI_DIGITAL]={0};
 	offset = dataset_conf[dataset].offset;
-	memset(npontos, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned int));
-	memset(states, 0, MAX_MSGS_GI_DIGITAL*sizeof(unsigned char));
-	
+	//just store first state for events	
 	for(i=0;i<dataset_conf[dataset].size;i++){
 		if(!srv_data->events[offset+i].not_present){
 			srv_data->events[offset+i].time_stamp = handle[i].time_stamp;
 			srv_data->events[offset+i].time_stamp_extended = handle[i].time_stamp_extended;
 			srv_data->events[offset+i].state = handle[i].state;
-
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
 			printd("EI:%25s: ", events_cfg[offset+i].id);
 			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events_cfg[offset+i].state_on, events_cfg[offset+i].state_off);
 #endif
 
-			events_cfg[offset+i].num_of_msg_rcv++;
-			npontos[msg_queue] = events_cfg[offset+i].nponto;
-			states[msg_queue]= handle[i].state;
-			msg_queue++;
-			if (!(msg_queue%MAX_MSGS_GI_DIGITAL)){//if queue is full
-				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
-						LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
-					}else{
-						digital_msgs++;
-					}
-					memset(npontos, 0, MAX_MSGS_GI_DIGITAL);
-					memset(states,  0, MAX_MSGS_GI_DIGITAL);
-				}
-				msg_queue=0;
-			}
-		}
-	}
-	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_GI_DIGITAL && ihm_enabled && ihm_socket_send > 0){
-		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
-			LOG_MESSAGE( "Error sending list of events ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL );
-		}else{
-			digital_msgs++;
 		}
 	}
 }
@@ -576,7 +547,7 @@ static int read_dataset(st_server_data * srv_data, char * ds_name, unsigned int 
 		if(dataset_conf[offset].type == DATASET_DIGITAL){
 			handle_digital_integrity(srv_data,offset, handle);
 		} else if(dataset_conf[offset].type == DATASET_EVENTS){
-		//	handle_events_integrity(srv_data,offset, handle); //FIXME:do something else with read_dataset of events
+			handle_events_integrity(srv_data,offset, handle);
 		} else if(dataset_conf[offset].type == DATASET_ANALOG){
 			handle_analog_integrity(srv_data,offset, handle);
 		} else {
@@ -850,7 +821,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								if(dataset_conf[offset].type == DATASET_DIGITAL){
 									handle_digital_integrity(srv_data,offset, handle);
 								} else if(dataset_conf[offset].type == DATASET_EVENTS){
-									handle_events_integrity(srv_data,offset, handle);//FIXME:do something else with GI events
+									//handle_events_integrity(srv_data,offset, handle);//FIXME:do something else with GI events
 									LOG_MESSAGE( "ERROR - events integrity are disabled dataset %d rule 0 \n", offset);
 								} else if(dataset_conf[offset].type == DATASET_ANALOG){
 									handle_analog_integrity(srv_data,offset, handle);
