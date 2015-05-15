@@ -17,10 +17,10 @@
 /***************************** Defines for code debugging********************************************/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
-#define HANDLE_EVENTS_DATA_DEBUG 1
+//#define HANDLE_EVENTS_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
-#define DEBUG_DIGITAL_REPORTS 1
-#define DEBUG_EVENTS_REPORTS	1
+//#define DEBUG_DIGITAL_REPORTS 1
+//#define DEBUG_EVENTS_REPORTS	1
 //#define LOG_CONFIG	1
 //#define LOG_COUNTERS	1
 //#define DATA_LOG 1
