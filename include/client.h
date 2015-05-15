@@ -80,6 +80,15 @@
 #define REPORT_INTERVAL_TIMEOUT 0x02    // send "General interrogations"
 #define REPORT_OBJECT_CHANGES	0x04    // send reports
 
+//State mask
+//bit 0 is timestamp validity
+#define STATE_MASK_TIMESTAMP_INVALID 	0x01
+//bit 4 and 5 is data validity
+#define STATE_MASK_DATA_INVALID	   		0x30
+//bit 6 and 7 is data value
+#define STATE_MASK_DATA_VALUE	   		0xC0
+
+
 typedef struct {
 	unsigned int nponto;
 	char id[25];

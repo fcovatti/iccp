@@ -17,10 +17,10 @@
 /***************************** Defines for code debugging********************************************/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
-//#define HANDLE_EVENTS_DATA_DEBUG 1
+#define HANDLE_EVENTS_DATA_DEBUG 1
 //#define DEBUG_READ_DATASET 1
-//#define DEBUG_DIGITAL_REPORTS 1
-//#define DEBUG_EVENTS_REPORTS	1
+#define DEBUG_DIGITAL_REPORTS 1
+#define DEBUG_EVENTS_REPORTS	1
 //#define LOG_CONFIG	1
 //#define LOG_COUNTERS	1
 //#define DATA_LOG 1
@@ -126,7 +126,7 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			srv_data->analog[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-			printd("%25s: %11.2f %-6s |", analog_cfg[offset+i].id, handle[i].f,analog_cfg[offset+i].state_on);
+			printd("AI:%25s: %11.2f %-6s |", analog_cfg[offset+i].id, handle[i].f,analog_cfg[offset+i].state_on);
 			print_value(handle[i].state,1, handle[i].time_stamp,0, "", "");
 #endif
 
@@ -176,7 +176,7 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 			srv_data->digital[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_DIGITAL_DATA_DEBUG	
-			printd("%25s: ", digital_cfg[offset+i].id);
+			printd("DI:%25s: ", digital_cfg[offset+i].id);
 			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, digital_cfg[offset+i].state_on, digital_cfg[offset+i].state_off);
 #endif
 
@@ -224,7 +224,7 @@ void handle_events_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			srv_data->events[offset+i].state = handle[i].state;
 
 #ifdef HANDLE_EVENTS_DATA_DEBUG	
-			printd("%25s: ", events_cfg[offset+i].id);
+			printd("EI:%25s: ", events_cfg[offset+i].id);
 			print_value(handle[i].state,0, handle[i].time_stamp, handle[i].time_stamp_extended, events_cfg[offset+i].state_on, events_cfg[offset+i].state_off);
 #endif
 
@@ -276,7 +276,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 		analog_cfg[index].num_of_msg_rcv++;
 
 #ifdef HANDLE_ANALOG_DATA_DEBUG	
-		printd("%25s: %11.2f %-6s |", analog_cfg[index].id, value,analog_cfg[index].state_on);
+		printd("AR:%25s: %11.2f %-6s |", analog_cfg[index].id, value,analog_cfg[index].state_on);
 		print_value(state,1, time_stamp,0, "", "");
 #endif
 
@@ -303,7 +303,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 }
 /*********************************************************************************************************/
 void handle_digital_report(st_server_data *srv_data, unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-
+	int flapping=0;
 	if (digital_cfg != NULL && srv_data!= NULL && index >=0 && index < num_of_digital_ids) {
 
 #ifdef DATA_LOG
@@ -316,25 +316,31 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
 #endif
+		//if current state is invalid and last value is equal to new value
+		//if last state is invalid and last value is equal to new value
+		if((state&STATE_MASK_DATA_VALUE)==(srv_data->digital[index].state&STATE_MASK_DATA_VALUE)){
+			if((state&STATE_MASK_DATA_INVALID))
+				flapping=1;
+			else if((srv_data->digital[index].state&STATE_MASK_DATA_INVALID))
+				flapping=2;
+		}
+
 		srv_data->digital[index].state = state;
 		srv_data->digital[index].time_stamp = time_stamp;
 		srv_data->digital[index].time_stamp_extended = time_stamp_extended;
 		digital_cfg[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_DIGITAL_REPORTS	
-		if(!(state&0x01)){
-			printd("%25s: ", digital_cfg[index].id);
-			print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
-		}
-#endif
-
-#ifdef HANDLE_DIGITAL_DATA_DEBUG	
-		printd("%25s: ", digital_cfg[index].id);
+		if(!(state&STATE_MASK_TIMESTAMP_INVALID))
+			printd("DR%d:%25s: ", flapping, digital_cfg[index].id); //digital report
+		else
+			printd("DF%d:%25s: ", flapping, digital_cfg[index].id); //digital failed timestamp
 		print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
 			//if invalid timestamp buffer data
-			if(state&0x01){
+			//and if state is flapping
+			if((state&STATE_MASK_TIMESTAMP_INVALID) && flapping){
 				//BUFFERING DIGITAL DATA
 				Semaphore_wait(digital_queue.mutex);	
 				if(!digital_queue.size)
@@ -365,7 +371,7 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 }
 /*********************************************************************************************************/
 void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned int index,time_t time_stamp, unsigned short time_stamp_extended){
-
+	int flapping=0;
 	if (events_cfg != NULL && srv_data!=NULL && index >=0 && index < num_of_event_ids) {
 
 #ifdef DATA_LOG
@@ -378,25 +384,30 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 			fwrite(&data,1,sizeof(data_digital_out),data_file_events);
 		}
 #endif
+		//if current state is invalid and last value is equal to new value
+		//if last state is invalid and last value is equal to new value
+		if((state&STATE_MASK_DATA_VALUE)==(srv_data->events[index].state&STATE_MASK_DATA_VALUE)){
+			if((state&STATE_MASK_DATA_INVALID))
+				flapping=1;
+			else if((srv_data->events[index].state&STATE_MASK_DATA_INVALID))
+				flapping=2;
+		}
+
 		srv_data->events[index].state = state;
 		srv_data->events[index].time_stamp = time_stamp;
 		srv_data->events[index].time_stamp_extended = time_stamp_extended;
 		events_cfg[index].num_of_msg_rcv++;
 
 #ifdef DEBUG_EVENTS_REPORTS	
-		if(!(state&0x01)){
-			printd("(Report)%25s: ", events_cfg[index].id);
-			print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
-		}
-#endif
-
-#ifdef HANDLE_EVENTS_DATA_DEBUG	
-		printd("%25s: ", events_cfg[index].id);
+		if(!(state&STATE_MASK_TIMESTAMP_INVALID))
+			printd("ER%d:%25s: ", flapping, events_cfg[index].id); //event report
+		else
+			printd("EF%d:%25s: ",flapping, events_cfg[index].id); //events failed timestamp
 		print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
 #endif
 		if(ihm_enabled && ihm_socket_send > 0){
 			//if invalid timestamp buffer data
-			if(state&0x01){
+			if((state&STATE_MASK_TIMESTAMP_INVALID) && flapping){
 				//BUFFERING DIGITAL DATA
 				Semaphore_wait(digital_queue.mutex);	
 				if(!digital_queue.size)
@@ -565,7 +576,7 @@ static int read_dataset(st_server_data * srv_data, char * ds_name, unsigned int 
 		if(dataset_conf[offset].type == DATASET_DIGITAL){
 			handle_digital_integrity(srv_data,offset, handle);
 		} else if(dataset_conf[offset].type == DATASET_EVENTS){
-			//handle_events_integrity(srv_data,offset, handle); FIXME:do something else with read_dataset of events
+		//	handle_events_integrity(srv_data,offset, handle); //FIXME:do something else with read_dataset of events
 		} else if(dataset_conf[offset].type == DATASET_ANALOG){
 			handle_analog_integrity(srv_data,offset, handle);
 		} else {
@@ -839,7 +850,7 @@ informationReportHandler (void* parameter, char* domainName, char* variableListN
 								if(dataset_conf[offset].type == DATASET_DIGITAL){
 									handle_digital_integrity(srv_data,offset, handle);
 								} else if(dataset_conf[offset].type == DATASET_EVENTS){
-									//handle_events_integrity(srv_data,offset, handle);FIXME:do something else with GI events
+									handle_events_integrity(srv_data,offset, handle);//FIXME:do something else with GI events
 									LOG_MESSAGE( "ERROR - events integrity are disabled dataset %d rule 0 \n", offset);
 								} else if(dataset_conf[offset].type == DATASET_ANALOG){
 									handle_analog_integrity(srv_data,offset, handle);

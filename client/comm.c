@@ -375,7 +375,7 @@ int send_digital_to_ihm(int socketfd, struct sockaddr_in * server_sock_addr,unsi
 	digital_state = get_digital_state(state);
 
 	//only send as report if timestamp is valid
-	if(!(state&0x01) && report && time_stamp != 0xffffffff){
+	if(report && time_stamp != 0xffffffff){
 		digital_w_time7_seq digital_value;
 		msg_sup.causa=3; //report
 		msg_sup.tipo=30;
