@@ -2,44 +2,65 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <malloc.h>
 #include <signal.h>
-#include <sys/socket.h>
-#include <stddef.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
 #include <errno.h>
 
-#include "dumper.h"
-static int running = 1;
-static void sigint_handler(int signalID){
-	running = 0;
-}
+
+#include "client.h"
+#include "util.h"
+#include "comm.h"
+
+static struct sockaddr_in stats_sock_addr;
+
 int main (int argc, char ** argv){
-	int socket_dumper;
+	int socket_dumper_send;
+	int socket_dumper_receive;
+	unsigned int msg_send = ICCP_STATS_SIGNATURE;
 	char * msg_rcv;
-	signal(SIGINT, sigint_handler);
+	
 	if (argc != 2) {
-		printf("wrong usage\n");
+		printf("wrong usage\n stats_dump <ip iccp client>\n");
 		return -1;
 	}
-	if( atoi(argv[1]) == 1) {
-		socket_dumper = prepare_Wait(INADDR_ANY, PORT_DUMPER);
-		while(running) {
-			msg_rcv = WaitT(socket_dumper, 30000);	
-			if(msg_rcv == NULL) {
-				printf("no msg received\n");
-			} else {
-				printf("msg rcv %s \n", msg_rcv);
-			}
-		}
-		close(socket_dumper);
-	}else {
-		SendT(PORT_DUMPER, argv[1], 1);
+
+	//preparet socket to rcv msgs
+	socket_dumper_receive = prepare_Wait(PORT_STATS_TRANSMIT);
+
+	if(socket_dumper_send < 0){
+		printf("could not create UDP socket to listen to Stats Messages\n");
+		return -1;
 	}
+
+	//prepare socket to send msgs
+	printf("sending message to %s\n", argv[1]);
+	socket_dumper_send=prepare_Send(argv[1], PORT_STATS_LISTEN, &stats_sock_addr);
+	if(socket_dumper_send < 0){
+		printf("could not create UDP socket to send Stats Messages\n");
+		return -1;
+	}
+
+	//send message to stats server
+	SendT(socket_dumper_send, (void *)&msg_send, sizeof(unsigned int), &stats_sock_addr);
+	// could send argv[1]
+
+	//waits for answer for 3 seconds
+	printf("waiting reponse from %s\n", argv[1]);
+	msg_rcv = WaitT(socket_dumper_receive, 3000);	
+
+	//print return output
+	if(msg_rcv == NULL) {
+		printf("no msg received\n");
+	} else {
+		printf("msg rcv %s \n", msg_rcv);
+	}
+
+	//close socket and end program
+	close(socket_dumper_send);
+	close(socket_dumper_receive);
+	
 	return 0;
 }
+

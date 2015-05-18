@@ -24,6 +24,11 @@ IHM_ADDRESS="10.63.77.174";
 ICCP_BKP_ADDRESS="10.63.77.174";
 //ICCP_BKP_ADDRESS="no";
 
+//Name or IP of the server allowed to check ICCP Stats (if no stats configured use "no")
+//ICCP_STATS_ADDRESS="10.63.77.174";
+ICCP_STATS_ADDRESS="127.0.0.1";
+//ICCP_STATS_ADDRESS="no";
+
 // Name of the configuration file
 CONFIG_FILE="sage_id.txt";
 

@@ -1,88 +1,20 @@
-#BDTR makefile
+LIBIEC_HOME=../../libiec61850-iccp-0.7.7
 
-TARGET := dumper
-TARGET_DIR := ../bin
+PROJECT_BINARY_NAME = stats_dump
+PROJECT_SOURCES = dumper.c
+PROJECT_SOURCES += dcomm.c
 
-########################################################################
-#Include dirs
-INCLUDE	:= ../include
-COMMON	:= ../build/include
+include $(LIBIEC_HOME)/make/target_system.mk
+include $(LIBIEC_HOME)/make/stack_includes.mk
 
-########################################################################
-#flags
-CFLAGS   := -O2 -Wall -Werror -Wmissing-declarations -Wmissing-prototypes
-CINCLUDE := -I. -I$(INCLUDE) -I$(COMMON) 
-CLIBDIR  := ../build
-CLIBS    := -lm -pthread
-DEPFLAGS := -MM
+all:	$(PROJECT_BINARY_NAME)
 
-########################################################################
-#includes
-INCLUDE    = ${CINCLUDE}
-FLAGS      = ${CFLAGS}
-LIBDIR     = ${CLIBDIR}
-LIBS       = ${CLIBS}
-LIBINCLUDE = $(LIBDIR)
+include $(LIBIEC_HOME)/make/common_targets.mk
 
-########################################################################
-#Setzen alle zusammen..
-CC     	 = gcc
-LD       = ld
-AR       = ar
-ARFLAGS  = rvu
-CMPFLAGS = ${FLAGS} ${INCLUDE}
-LDFLAGS  = ${LIBS}
-
-########################################################################
-CSOURCES = $(wildcard *.c)
-OBJECTS  = $(CSOURCES:.c=.o)
-DEPS     = $(CSOURCES:.c=.d)
-OBJS	 = #$(COMMON)/*.o $(MODEL)/*.o #$(SIMUL)/*.o $(MONITOR)/*.o $(ROBOTHREAD)/*.o 
-LIBFILES = $(LIBINCLUDE)/libiec61850.a
-
-########################################################################
-#RTAI
-#prefix := $(shell rtai-config --prefix)
-
-#ifeq ($(prefix),)
-#$(error Please add <rtai-install>/bin to your PATH variable)
-#endif
-
-#LXRT_CFLAGS = $(shell rtai-config --lxrt-cflags)
-#LXRT_LDFLAGS = $(shell rtai-config --lxrt-ldflags)
-
-########################################################################
-
-#LIBFILES += $(LXRT_LDFLAGS)
-
-#General
-QUIET = @
-
-.PHONY: clean clobber 
-
-all: $(TARGET)
-	mv $(TARGET) $(TARGET_DIR)
-
-$(TARGET): $(OBJECTS)
-	$(QUIET)echo Compiling executable file: $@
-	$(QUIET)${CC}  -g -o $@  $^ $(OBJS) $(LIBFILES) $(LXRT_LDFLAGS) $(LDFLAGS)
-
-%.o: %.c
-	$(QUIET)echo Creating object: $@
-	$(QUIET)$(CC) $(CMPFLAGS) $(LIBS) -c $(LXRT_CFLAGS) $^
+$(PROJECT_BINARY_NAME):	$(PROJECT_SOURCES) $(LIB_NAME)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(PROJECT_BINARY_NAME) -I../include $(PROJECT_SOURCES) $(INCLUDES) $(LIB_NAME) $(LDLIBS)
 
 clean:
-	$(QUIET)echo Removing temp and object files
-	$(QUIET)rm -f *~ *.bak *.o $(DEPS) 
+	rm -f $(PROJECT_BINARY_NAME)
 
-clobber: clean
-	$(QUIET)echo Removing executable and some unnecessary files
-	$(QUIET)rm -f $(TARGET)
-
--include $(DEPS)
-%.d: %.c
-	$(QUIET)echo Creating dep: $@
-	$(QUIET)$(CC) $(DEPFLAGS) $(LIBS) $(CMPFLAGS) $< \
-	| sed 's!\($*\)\.o[ :]*!\1.o $@ : !g' > $@; \
-	[ -s $@ ] || rm -f $@
 

@@ -96,6 +96,8 @@ typedef struct {
 	char state_off[16];
 //	char type; //FIXME not used anymore...remove
 	unsigned int num_of_msg_rcv;
+	unsigned int num_of_reports;
+	unsigned int num_of_flapping;
 } data_config;
 
 typedef struct {
@@ -111,6 +113,9 @@ typedef struct {
 	char id[25];
 	char type;
 	unsigned int monitored;
+	unsigned int num_of_msg_rcv;
+	unsigned int num_of_cmd_ok;
+	unsigned int num_of_cmd_error;
 } command_config;
 
 typedef enum{
@@ -146,7 +151,6 @@ typedef struct {
 	unsigned int time;
 	Semaphore mutex;
 } st_digital_queue;
-
 
 typedef struct {
 	unsigned int nponto;
