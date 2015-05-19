@@ -88,6 +88,39 @@
 //bit 6 and 7 is data value
 #define STATE_MASK_DATA_VALUE	   		0xC0
 
+//Get state commands
+#define GET_GLOBAL_COUNTERS 	0x01
+#define GET_HMI_COUNTERS 		0x03
+#define GET_NPONTO_COUNTERS 	0x05
+#define GET_NPONTO_STATE	 	0x07
+#define GET_CMD_COUNTERS	 	0x09
+
+typedef struct {
+	unsigned int cmd;
+	unsigned int nponto;
+} __attribute__((packed)) stats_data_msg;
+
+typedef struct {
+	unsigned int analog_ids;	
+	unsigned int digital_ids;	
+	unsigned int event_ids;	
+	unsigned int commands;	
+	unsigned int datasets;
+	unsigned int analog_datasets;
+	unsigned int digital_datasets;
+	unsigned int event_datasets;
+} __attribute__((packed)) stats_global_counters;
+
+typedef struct {
+	unsigned int report_msgs;
+	unsigned int digital_msgs;
+	unsigned int analog_msgs;
+} __attribute__((packed)) stats_hmi_counters;
+
+#define stats_nponto_counters data_config
+#define stats_nponto_state data_to_handle
+#define stats_cmd_counters command_config
+
 
 typedef struct {
 	unsigned int nponto;
@@ -98,7 +131,7 @@ typedef struct {
 	unsigned int num_of_msg_rcv;
 	unsigned int num_of_reports;
 	unsigned int num_of_flapping;
-} data_config;
+}  __attribute__((packed)) data_config;
 
 typedef struct {
 	float f;
@@ -106,7 +139,7 @@ typedef struct {
 	time_t time_stamp;
 	unsigned short time_stamp_extended;
 	unsigned char not_present;
-} data_to_handle;
+}  __attribute__((packed)) data_to_handle;
 
 typedef struct {
 	unsigned int nponto;
@@ -116,7 +149,7 @@ typedef struct {
 	unsigned int num_of_msg_rcv;
 	unsigned int num_of_cmd_ok;
 	unsigned int num_of_cmd_error;
-} command_config;
+}  __attribute__((packed)) command_config;
 
 typedef enum{
 	DATASET_ANALOG,

@@ -1554,19 +1554,100 @@ static void * check_bkp_thread(void * parameter)
 static void * check_stats_thread(void * parameter)
 {
 	LOG_MESSAGE("Stats Thread Started\n");
+	int i;
+
 	while(running){
-		char * msg_rcv;
-		msg_rcv = WaitT(stats_socket_receive, 2000);	
+		stats_data_msg * msg_rcv;
+		msg_rcv = (stats_data_msg *) WaitT(stats_socket_receive, 2000);	
 		if(msg_rcv != NULL) {
-			unsigned int msg_code = 0;
-			memcpy(&msg_code, msg_rcv, sizeof(unsigned int));
-			if(msg_code == ICCP_STATS_SIGNATURE){ 
-				printf("received stats msg\n");	
-				if(SendT(stats_socket_send,(void *)&msg_code, sizeof(unsigned int), &stats_sock_addr) < 0){
+			if (msg_rcv->cmd== GET_GLOBAL_COUNTERS) {
+				stats_global_counters msg_send;
+				msg_send.analog_ids =  num_of_analog_ids;	
+				msg_send.digital_ids = num_of_digital_ids;	
+				msg_send.event_ids =  num_of_event_ids;	
+				msg_send.commands = num_of_commands;	
+				msg_send.datasets = num_of_datasets;
+				msg_send.analog_datasets = num_of_analog_datasets;
+				msg_send.digital_datasets = num_of_digital_datasets;
+				msg_send.event_datasets = num_of_event_datasets;
+				if(SendT(stats_socket_send,(void *)&msg_send, sizeof(stats_global_counters), &stats_sock_addr) < 0){
 					LOG_MESSAGE("Error sending message to backup server\n");
 				}
-			}	
-		}
+			} else if (msg_rcv->cmd == GET_HMI_COUNTERS) {
+				stats_hmi_counters msg_send;
+				msg_send.report_msgs = num_of_report_msgs;
+				msg_send.digital_msgs = num_of_digital_msgs;
+				msg_send.analog_msgs = num_of_analog_msgs;
+				if(SendT(stats_socket_send,(void *)&msg_send, sizeof(stats_hmi_counters), &stats_sock_addr) < 0){
+					LOG_MESSAGE("Error sending message to backup server\n");
+				}
+			} else if (msg_rcv->cmd == GET_NPONTO_COUNTERS) {
+				stats_nponto_counters msg_send;
+				int found = 0;
+				memset(&msg_send, 0xFF , sizeof(stats_nponto_counters));
+				for (i=0;((i<num_of_analog_ids) && !found); i++) {
+					if(analog_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &analog_cfg[i], sizeof(stats_nponto_counters));
+						found = 1;
+					}
+				}
+				for (i=0;((i<num_of_digital_ids) && !found); i++) {
+					if(digital_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &digital_cfg[i], sizeof(stats_nponto_counters));
+						found = 1;
+					}
+				}
+				for (i=0;((i<num_of_event_ids) && !found); i++) {
+					if(events_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &events_cfg[i], sizeof(stats_nponto_counters));
+						found = 1;
+					}
+				}
+				if(SendT(stats_socket_send,(void *)&msg_send, sizeof(stats_nponto_counters), &stats_sock_addr) < 0){
+					LOG_MESSAGE("Error sending message to backup server\n");
+				}
+			} else if (msg_rcv->cmd == GET_NPONTO_STATE) {
+				stats_nponto_state msg_send;
+				int found = 0;
+				memset(&msg_send, 0xFF , sizeof(stats_nponto_state));
+				for (i=0;((i<num_of_analog_ids) && !found); i++) {
+					if(analog_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &srv_main.analog[i], sizeof(stats_nponto_state));
+						found = 1;
+					}
+				}
+				for (i=0;((i<num_of_digital_ids) && !found); i++) {
+					if(digital_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &srv_main.digital[i], sizeof(stats_nponto_state));
+						found = 1;
+					}
+				}
+				for (i=0;((i<num_of_event_ids) && !found); i++) {
+					if(events_cfg[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &srv_main.events[i], sizeof(stats_nponto_state));
+						found = 1;
+					}
+				}
+				if(SendT(stats_socket_send,(void *)&msg_send, sizeof(stats_nponto_counters), &stats_sock_addr) < 0){
+					LOG_MESSAGE("Error sending message to backup server\n");
+				}
+			} else if (msg_rcv->cmd == GET_CMD_COUNTERS) {
+				stats_cmd_counters msg_send;
+				memset(&msg_send, 0xFF , sizeof(stats_nponto_counters));
+				for (i=0;i<num_of_commands; i++) {
+					if(commands[i].nponto == msg_rcv->nponto){
+						memcpy(&msg_send, &commands[i], sizeof(stats_cmd_counters));
+						break;
+					}
+				}
+				if(SendT(stats_socket_send,(void *)&msg_send, sizeof(stats_cmd_counters), &stats_sock_addr) < 0){
+					LOG_MESSAGE("Error sending message to backup server\n");
+				}
+			 } else {
+				 LOG_MESSAGE ("ERROR - unknown stats message %d\n", msg_rcv->cmd);
+			 } 
+			free(msg_rcv);
+		}	
 	}
 	return NULL;
 }
@@ -1802,8 +1883,6 @@ int main (int argc, char ** argv){
 		cleanup_variables();
 		return -1;
 	}
-
-
 	
 	//INITIALIZE ICCP CONNECTIONs TO SERVERs 
 	if(connect_to_iccp_server(&srv_main.con, srv1,srv2,srv3,srv4) < 0){
