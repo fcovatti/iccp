@@ -1483,6 +1483,7 @@ static int check_backup(unsigned int msg_timeout){
 	if(msg_rcv != NULL) {
 		unsigned int msg_code = 0;
 		memcpy(&msg_code, msg_rcv, sizeof(unsigned int));
+		free(msg_rcv);
 		if(msg_code == ICCP_BACKUP_SIGNATURE) 
 			return 0;		
 	}
@@ -1531,6 +1532,7 @@ static void check_commands(){
 			}
 			LOG_MESSAGE("\n");
 		}
+		free(msg_rcv);
 	}
 }
 /*********************************************************************************************************/
