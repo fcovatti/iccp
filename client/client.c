@@ -296,28 +296,20 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 			fwrite(&data,1,sizeof(data_digital_out),data_file_digital);
 		}
 #endif
-		//if current state is invalid and last value is equal to new value
-		//if last state is invalid and last value is equal to new value
+		//if timestamp is invalid and last value is equal to new value  
 		if((state&STATE_MASK_DATA_VALUE)==(srv_data->digital[index].state&STATE_MASK_DATA_VALUE)){
-			if((state&STATE_MASK_DATA_INVALID)){
+			if ((state&STATE_MASK_TIMESTAMP_INVALID)){
 				flapping=1;
-				digital_cfg[index].num_of_flapping++;
-			}
-			else if((srv_data->digital[index].state&STATE_MASK_DATA_INVALID)){
-				flapping=2;
 				digital_cfg[index].num_of_flapping++;
 			}
 		}
 
-		srv_data->digital[index].state = state;
-		srv_data->digital[index].time_stamp = time_stamp;
-		srv_data->digital[index].time_stamp_extended = time_stamp_extended;
 		digital_cfg[index].num_of_msg_rcv++;
 
 		if(ihm_enabled && ihm_socket_send > 0){
 			//if invalid timestamp buffer data
 			//and if state is flapping
-			if((state&STATE_MASK_TIMESTAMP_INVALID) && flapping){
+			if(flapping){
 				//BUFFERING DIGITAL DATA
 				Semaphore_wait(digital_queue.mutex);	
 				if(!digital_queue.size)
@@ -339,6 +331,8 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 #ifdef DEBUG_DIGITAL_REPORTS	
 				printd("DR%d:%25s: ", flapping, digital_cfg[index].id); //digital report
 				print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
+				printd("                                ");
+				print_value(srv_data->digital[index].state,0, srv_data->digital[index].time_stamp, srv_data->digital[index].time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
 #endif
 				Semaphore_wait(digital_mutex);	
 				if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
@@ -349,6 +343,10 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 				Semaphore_post(digital_mutex);	
 			}
 		}
+		srv_data->digital[index].state = state;
+		srv_data->digital[index].time_stamp = time_stamp;
+		srv_data->digital[index].time_stamp_extended = time_stamp_extended;
+
 	}
 }
 /*********************************************************************************************************/
@@ -1929,7 +1927,7 @@ int main (int argc, char ** argv){
 		if(!ihm_enabled)
 			Thread_sleep(2000);
 		else{
-			if( ihm_socket_receive > 0)
+			if(ihm_socket_receive > 0)
 				check_commands();
 	
 			if( ihm_socket_send > 0){
