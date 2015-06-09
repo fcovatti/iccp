@@ -21,8 +21,8 @@ IHM_ADDRESS="10.63.77.174";
 //IHM_ADDRESS="no";
 
 //Name or IP of the Backup ICCP client (if no backup configured use "no")
-ICCP_BKP_ADDRESS="10.63.77.174";
-//ICCP_BKP_ADDRESS="no";
+//ICCP_BKP_ADDRESS="10.63.77.174";
+ICCP_BKP_ADDRESS="no";
 
 //Name or IP of the server allowed to check ICCP Stats (if no stats configured use "no")
 //ICCP_STATS_ADDRESS="10.63.77.174";

@@ -75,11 +75,13 @@ static struct sockaddr_in stats_sock_addr;
 
 //IHM useful varibless
 static char ihm_addr[MAX_STR_NAME];
-static int ihm_socket_send=0;
+static int ihm_main_socket_send=0;
+static int ihm_bkp_socket_send=0;
 static int ihm_socket_receive=0;
 static int ihm_enabled=0;
 static int ihm_station=0;
-static struct sockaddr_in ihm_sock_addr;
+static struct sockaddr_in ihm_main_sock_addr;
+static struct sockaddr_in ihm_bkp_sock_addr;
 static struct timeval start, curr_time;
 
 //IHM Counters
@@ -144,12 +146,17 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			states[msg_queue]= handle[i].state;
 			msg_queue++;
 			if (!(msg_queue%MAX_MSGS_GI_ANALOG)){//manda a cada 125
-				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
-						LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
-					}else{
-						num_of_analog_msgs++;
+				if(ihm_enabled){
+					if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
+						LOG_MESSAGE( "Error sending list of analog ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 					}
+					if(bkp_enabled){
+						if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
+							LOG_MESSAGE( "Error sending list of analog ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
+						}
+					}
+
+					num_of_analog_msgs++;
 					memset(npontos, 0, MAX_MSGS_GI_ANALOG);
 					memset(values,  0, MAX_MSGS_GI_ANALOG);
 					memset(states,  0, MAX_MSGS_GI_ANALOG);
@@ -159,12 +166,17 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 		}
 	}
 	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_GI_ANALOG && ihm_enabled && ihm_socket_send > 0){
-		if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
-			LOG_MESSAGE( "Error sending list of analog ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
-		}else{
-			num_of_analog_msgs++;
+	if(msg_queue%MAX_MSGS_GI_ANALOG && ihm_enabled){
+		if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
+			LOG_MESSAGE( "Error sending rest of analog ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 		}
+		if(bkp_enabled){
+			if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
+				LOG_MESSAGE( "Error sending rest of analog ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
+			}
+		}
+
+		num_of_analog_msgs++;
 	}
 }
 
@@ -193,12 +205,16 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 			states[msg_queue] = handle[i].state;
 			msg_queue++;
 			if (!(msg_queue%MAX_MSGS_GI_DIGITAL)){//if queue is full
-				if(ihm_enabled && ihm_socket_send > 0){
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
-						LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
-					}else{
-						num_of_digital_msgs++;
+				if(ihm_enabled){
+					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+						LOG_MESSAGE( "Error sending list of digital ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 					}
+					if(bkp_enabled){
+						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+							LOG_MESSAGE( "Error sending list of digital ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
+						}
+					}
+					num_of_digital_msgs++;
 					memset(npontos, 0, MAX_MSGS_GI_DIGITAL);
 					memset(states,  0, MAX_MSGS_GI_DIGITAL);
 				}
@@ -207,12 +223,16 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 		}
 	}
 	//if dataset size is not exactly multiple of queues...send what is left
-	if(msg_queue%MAX_MSGS_GI_DIGITAL && ihm_enabled && ihm_socket_send > 0){
-		if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
-			LOG_MESSAGE( "Error sending list of digital ds %d part %d\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
-		}else{
-			num_of_digital_msgs++;
+	if(msg_queue%MAX_MSGS_GI_DIGITAL && ihm_enabled){
+		if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
+			LOG_MESSAGE( "Error sending list of digital ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
 		}
+		if(bkp_enabled){
+			if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+				LOG_MESSAGE( "Error sending list of digital ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
+			}
+		}
+		num_of_digital_msgs++;
 	}
 }
 
@@ -261,7 +281,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 #endif
 
 		//BUFFERING ANALOG DATA
-		if(ihm_enabled && ihm_socket_send > 0){
+		if(ihm_enabled){
 			Semaphore_wait(analog_queue.mutex);	
 			if(!analog_queue.size)
 				analog_queue.time=get_time_ms();//first income packet store time of receive
@@ -270,12 +290,16 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 			analog_queue.npontos[analog_queue.size]=analog_cfg[index].nponto;
 			analog_queue.size++;
 			if(analog_queue.size==MAX_MSGS_SQ_ANALOG){//if queue is full, send to ihm
-				if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
-					LOG_MESSAGE( "Error sending analog buffer \n");
-				}else{
-					num_of_analog_msgs++;
-					analog_queue.size=0;
+				if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
+					LOG_MESSAGE( "Error sending analog buffer main \n");
 				}
+				if(bkp_enabled){
+					if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
+						LOG_MESSAGE( "Error sending analog buffer bkp \n");
+					}
+				}
+				num_of_analog_msgs++;
+				analog_queue.size=0;
 			}
 			Semaphore_post(analog_queue.mutex);	
 		}
@@ -306,7 +330,7 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 
 		digital_cfg[index].num_of_msg_rcv++;
 
-		if(ihm_enabled && ihm_socket_send > 0){
+		if(ihm_enabled){
 			//if invalid timestamp buffer data
 			//and if state is flapping
 			if(flapping){
@@ -318,12 +342,16 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 				digital_queue.npontos[digital_queue.size]=digital_cfg[index].nponto;
 				digital_queue.size++;
 				if(digital_queue.size==MAX_MSGS_SQ_DIGITAL){//if queue is full, send to ihm
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
-						LOG_MESSAGE( "Error sending digital buffer \n");
-					}else{
-						num_of_digital_msgs++;
-						digital_queue.size=0;
+					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
+						LOG_MESSAGE( "Error sending digital buffer main\n");
 					}
+					if(bkp_enabled) {
+						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
+							LOG_MESSAGE( "Error sending digital buffer bkp\n");
+						}
+					}
+					num_of_digital_msgs++;
+					digital_queue.size=0;
 				}
 				Semaphore_post(digital_queue.mutex);	
 			}else{
@@ -331,15 +359,17 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 #ifdef DEBUG_DIGITAL_REPORTS	
 				printd("DR%d:%25s: ", flapping, digital_cfg[index].id); //digital report
 				print_value(state,0, time_stamp, time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
-				printd("                                ");
-				print_value(srv_data->digital[index].state,0, srv_data->digital[index].time_stamp, srv_data->digital[index].time_stamp_extended, digital_cfg[index].state_on, digital_cfg[index].state_off);
 #endif
 				Semaphore_wait(digital_mutex);	
-				if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
-					LOG_MESSAGE( "Error sending nponto %d\n", digital_cfg[index].nponto);
-				}else{
-					num_of_report_msgs++;
+				if(send_digital_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
+					LOG_MESSAGE( "Error sending nponto %d main\n", digital_cfg[index].nponto);
 				}
+				if(bkp_enabled) {
+					if(send_digital_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
+						LOG_MESSAGE( "Error sending nponto %d bkp\n", digital_cfg[index].nponto);
+					}
+				}
+				num_of_report_msgs++;
 				Semaphore_post(digital_mutex);	
 			}
 		}
@@ -382,7 +412,7 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 		srv_data->events[index].time_stamp_extended = time_stamp_extended;
 		events_cfg[index].num_of_msg_rcv++;
 
-		if(ihm_enabled && ihm_socket_send > 0){
+		if(ihm_enabled){
 			//if invalid timestamp buffer data
 			if((state&STATE_MASK_TIMESTAMP_INVALID) && flapping){
 				//BUFFERING DIGITAL DATA
@@ -393,12 +423,16 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 				digital_queue.npontos[digital_queue.size]=events_cfg[index].nponto;
 				digital_queue.size++;
 				if(digital_queue.size==MAX_MSGS_SQ_DIGITAL){//if queue is full, send to ihm
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
-						LOG_MESSAGE( "Error sending digital buffer \n");
-					}else{
-						num_of_digital_msgs++;
-						digital_queue.size=0;
+					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
+						LOG_MESSAGE( "Error sending digital buffer main \n");
 					}
+					if(bkp_enabled){
+						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
+							LOG_MESSAGE( "Error sending digital buffer bkp \n");
+						}
+					}
+					num_of_digital_msgs++;
+					digital_queue.size=0;
 				}
 				Semaphore_post(digital_queue.mutex);	
 			}else{
@@ -408,11 +442,15 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 				print_value(state,0, time_stamp, time_stamp_extended, events_cfg[index].state_on, events_cfg[index].state_off);
 #endif
 				Semaphore_wait(digital_mutex);	
-				if(send_digital_to_ihm(ihm_socket_send, &ihm_sock_addr, events_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
-					LOG_MESSAGE( "Error sending nponto %d\n", events_cfg[index].nponto);
-				}else{
-					num_of_report_msgs++;
+				if(send_digital_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, events_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
+					LOG_MESSAGE( "Error sending nponto %d main\n", events_cfg[index].nponto);
 				}
+				if(bkp_enabled){
+					if(send_digital_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, events_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
+						LOG_MESSAGE( "Error sending nponto %d bkp\n", events_cfg[index].nponto);
+					}
+				}
+				num_of_report_msgs++;
 				Semaphore_post(digital_mutex);	
 			}
 		}
@@ -1387,7 +1425,8 @@ static void cleanup_variables()
 	free(srv_bckp.events);
 
 	if(ihm_enabled){
-		close(ihm_socket_send);
+		close(ihm_main_socket_send);
+		close(ihm_bkp_socket_send);
 		close(ihm_socket_receive);
 	}
 	if(bkp_enabled){
@@ -1422,17 +1461,26 @@ static int open_data_logs(void) {
 #endif
 /*********************************************************************************************************/
 static int create_ihm_comm(){
-	ihm_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_sock_addr);
-	if(ihm_socket_send < 0){
+	ihm_main_socket_send = prepare_Send(ihm_addr, PORT_IHM_TRANSMIT, &ihm_main_sock_addr);
+	if(ihm_main_socket_send < 0){
 		LOG_MESSAGE("could not create UDP socket to trasmit to IHM\n");
 		return -1;
 	}	
-	LOG_MESSAGE("Created UDP socket %d for IHM %s Port %d\n",ihm_socket_send, ihm_addr, PORT_IHM_TRANSMIT);
+	LOG_MESSAGE("Created UDP socket %d for IHM %s Port %d\n",ihm_main_socket_send, ihm_addr, PORT_IHM_TRANSMIT);
+
+	if(bkp_enabled){
+		ihm_bkp_socket_send = prepare_Send(bkp_addr, PORT_IHM_TRANSMIT, &ihm_bkp_sock_addr);
+		if(ihm_bkp_socket_send < 0){
+			LOG_MESSAGE("could not create UDP socket to trasmit to IHM bkp\n");
+			return -1;
+		}	
+		LOG_MESSAGE("Created UDP socket %d for IHM bkp %s Port %d\n",ihm_bkp_socket_send, bkp_addr, PORT_IHM_TRANSMIT);
+	}
 
 	ihm_socket_receive = prepare_Wait(PORT_IHM_LISTEN);
 	if(ihm_socket_receive < 0){
 		LOG_MESSAGE("could not create UDP socket to listen to IHM\n");
-		close(ihm_socket_send);
+		close(ihm_main_socket_send);
 		return -1;
 	}
 	LOG_MESSAGE("Created UDP local socket %d for IHM Port %d\n",ihm_socket_receive,PORT_IHM_LISTEN);
@@ -1512,15 +1560,23 @@ static void check_commands(){
 			LOG_MESSAGE( "Command %d, type %d, onoff %d, sbo %d, qu %d, utr %d\n", cmd_recv.endereco, cmd_recv.tipo, 
 					cmd_recv.onoff, cmd_recv.sbo, cmd_recv.qu, cmd_recv.utr);
 
-			//TODO:check if both connections enabled and send to the one with monitored state valid
-			if(command_variable(srv_main.con, commands[i].id, cmd_recv.onoff)<0){
-				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
-				commands[i].num_of_cmd_error++;
-				LOG_MESSAGE("Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
-			} else {
-				send_cmd_response_to_ihm(ihm_socket_send, &ihm_sock_addr, commands[i].nponto, ihm_station, 1); //CMD OK
-				commands[i].num_of_cmd_ok++;
-				LOG_MESSAGE("Done writing %d to %s\n", cmd_recv.onoff, commands[i].id);
+			if(srv_main.enabled) {
+				//TODO:check if both connections enabled and send to the one with monitored state valid
+				if(command_variable(srv_main.con, commands[i].id, cmd_recv.onoff)<0){
+					send_cmd_response_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
+					if(bkp_enabled)
+						send_cmd_response_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
+					commands[i].num_of_cmd_error++;
+					LOG_MESSAGE("Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
+				} else {
+					send_cmd_response_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, commands[i].nponto, ihm_station, 1); //CMD OK
+					if(bkp_enabled)
+						send_cmd_response_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, commands[i].nponto, ihm_station, 1); //CMD OK
+					commands[i].num_of_cmd_ok++;
+					LOG_MESSAGE("Done writing %d to %s\n", cmd_recv.onoff, commands[i].id);
+				}
+			} else{
+				LOG_MESSAGE("WARN - discarding command %d iccp connection is not enabled\n", cmd_recv.endereco);
 			}
 		}else{
 			char * cmd_debug = (char *)&cmd_recv;
@@ -1930,28 +1986,43 @@ int main (int argc, char ** argv){
 			if(ihm_socket_receive > 0)
 				check_commands();
 	
-			if( ihm_socket_send > 0){
+			if(ihm_main_socket_send < 0){
+				LOG_MESSAGE("IHM main socket closed\n");
+				running=0;
+			} else if(bkp_enabled && ihm_bkp_socket_send < 0) {
+				LOG_MESSAGE("IHM bkp socket closed\n");
+				running=0;
+			} else {
+				
 				// EMPTY ANALOG QUEUE	
 				Semaphore_wait(analog_queue.mutex);	
 				if(analog_queue.size && ((get_time_ms()-analog_queue.time) > 4000)){//timeout to send analog buffered messages if not empty
-					if(send_analog_list_to_ihm(ihm_socket_send, &ihm_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
-						LOG_MESSAGE( "Error sending analog buffer \n");
-					}else{
-						num_of_analog_msgs++;
-						analog_queue.size=0;
+					if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
+						LOG_MESSAGE( "Error sending analog buffer to main IHM\n");
 					}
+					if(bkp_enabled){
+						if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
+							LOG_MESSAGE( "Error sending analog buffer to bkp IHM \n");
+						}
+					}
+					num_of_analog_msgs++;
+					analog_queue.size=0;
 				}
 				Semaphore_post(analog_queue.mutex);	
 
 				// EMPTY DIGITAL QUEUE	
 				Semaphore_wait(digital_queue.mutex);	
 				if(digital_queue.size && ((get_time_ms()- digital_queue.time) > 3000)){//timeout to send digital buffered messages if not empty
-					if(send_digital_list_to_ihm(ihm_socket_send, &ihm_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
-						LOG_MESSAGE( "Error sending digital buffer \n");
-					}else{
-						num_of_digital_msgs++;
-						digital_queue.size=0;
+					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
+						LOG_MESSAGE( "Error sending digital buffer to main IHM \n");
 					}
+					if(bkp_enabled){
+						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
+							LOG_MESSAGE( "Error sending digital buffer to bkp IHM\n");
+						}
+					}
+					num_of_digital_msgs++;
+					digital_queue.size=0;
 				}
 				Semaphore_post(digital_queue.mutex);	
 			}
