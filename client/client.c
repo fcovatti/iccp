@@ -70,6 +70,7 @@ static struct sockaddr_in bkp_sock_addr;
 static char stats_addr[MAX_STR_NAME];
 static int stats_socket_send;
 static int stats_socket_receive;
+static int stats_enabled;
 static unsigned int stats_signature = ICCP_STATS_SIGNATURE;
 static struct sockaddr_in stats_sock_addr;
 
@@ -1375,6 +1376,9 @@ static void cleanup_variables()
 	if(bkp_enabled)
 		Thread_destroy(bkp_thread);
 
+	if(stats_enabled)
+		Thread_destroy(stats_thread);
+
 	if(srv_main.enabled)
 		MmsConnection_conclude(srv_main.con, &mmsError);
 
@@ -1757,6 +1761,7 @@ int start_stats_configuration(void){
 		LOG_MESSAGE("no iccp client stats configured\n");
 	}else{
 		LOG_MESSAGE("stats enabled\n");
+		stats_enabled=1;
 		if(create_stats_comm() < 0){
 			LOG_MESSAGE("Error, cannot open communication to stats server\n");
 			return -1;
