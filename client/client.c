@@ -171,7 +171,7 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 			LOG_MESSAGE( "Error sending rest of analog ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 		}
 		if(bkp_enabled){
-			if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
+			if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
 				LOG_MESSAGE( "Error sending rest of analog ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 			}
 		}
@@ -228,7 +228,7 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 			LOG_MESSAGE( "Error sending list of digital ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
 		}
 		if(bkp_enabled){
-			if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
+			if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
 				LOG_MESSAGE( "Error sending list of digital ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 			}
 		}
