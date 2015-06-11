@@ -36,33 +36,44 @@ static int create_ihm_comm(){
 /*********************************************************************************************************/
 static int check_packet(){
 	char * msg_rcv;
-	t_msgsup msg;
+	unsigned int signature;
+	t_msgsup *msg;
+	t_msgsupsq *msg_sq;
 	msg_rcv = WaitT(ihm_socket_receive, 2000);	
 	if(msg_rcv != NULL) {
-		memcpy(&msg, msg_rcv, sizeof(t_msgsup));
-		if(msg.signature==IHM_SINGLE_POINT_SIGN){
-			if(msg.tipo==30)
-				events_msgs++;	
-			else if(msg.tipo==1){
+		memcpy(&signature, msg_rcv, sizeof(unsigned int));
+		if(signature==IHM_SINGLE_POINT_SIGN){
+			msg=(t_msgsup *)msg_rcv;
+			if(msg->tipo==30){
+				digital_w_time7_seq *info;
+				info=(digital_w_time7_seq *)msg->info;
+				events_msgs++;
+				printf("%06d %02x %02d%02d%02d %02d%02d%02d%03d\n", msg->endereco, info->iq, info->dia, info->mes, 
+						info->ano, info->hora, info->min, info->ms/1000, info->ms%1000 );
+			}	
+			else if(msg->tipo==1){
 				events_msgs++;	
 				should_be_type_30++;
 			}
-			else
+			else{
 				error_msgs++;
-			//	printf("wrong type %d\n",msg.tipo);
+				//printf("wrong type %d\n",msg->tipo);
+			}
 		}
-		else if(msg.signature==IHM_POINT_LIST_SIGN){
-			if(msg.tipo==1)
+		else if(signature==IHM_POINT_LIST_SIGN){
+			msg_sq=(t_msgsupsq *)msg_rcv;
+			if(msg_sq->tipo==1)
 				digital_msgs++;	
-			else if(msg.tipo==13)
+			else if(msg_sq->tipo==13)
 				analog_msgs++;
-			else
+			else{
 				error_msgs++;
-			//	printf("wrong gi type %d\n",msg.tipo);
+				//printf("wrong gi type %d\n",msg_sq->tipo);
+			}
 		}
 		else{
 			error_msgs++;
-		//	printf("wrong signature %d\n", msg.signature);
+			//printf("wrong signature %d\n", signature);
 		}
 	}
 	return -1;
@@ -76,9 +87,10 @@ int main (int argc, char ** argv){
 	}
 	while(running){
 		check_packet();
-		printf("Total Receive %d - A:%d   D:%d   E:%d (%d) | Error: %d\n", (digital_msgs+analog_msgs+events_msgs),
-				analog_msgs, digital_msgs, events_msgs, should_be_type_30, error_msgs);
 	}
+	printf("Total Receive %d - A:%d   D:%d   E:%d (%d) | Error: %d\n", (digital_msgs+analog_msgs+events_msgs),
+			analog_msgs, digital_msgs, events_msgs, should_be_type_30, error_msgs);
+
 	close(ihm_socket_receive);
 	return 0;
 }
