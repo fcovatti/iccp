@@ -1,7 +1,7 @@
 LIBIEC_HOME=../../libiec61850-iccp-0.7.7
 
 PROJECT_BINARY_NAME = ihm_test
-PROJECT_SOURCES = ../client/comm.c
+PROJECT_SOURCES = dcomm.c
 PROJECT_SOURCES += ihm.c
 #PROJECT_SOURCES += control.c
 
