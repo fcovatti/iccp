@@ -4,6 +4,7 @@ This project aims to develop an ICCP Client that connects to a SCADA ICCP Server
 
 Compilation:
 -------
+The source code was developed in C language.
 For compilation, it is necessary to have the libiec61850 Library (http://libiec61850.com/).
 
 
