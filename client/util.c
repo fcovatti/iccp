@@ -272,7 +272,7 @@ int check_connection(MmsConnection con, char * id_iccp, int * loop_error) {
 			return -1;
 		}
 		else if (mmsError == MMS_ERROR_SERVICE_TIMEOUT){
-			*loop_error++;
+			*loop_error = (*loop_error) + 1;
 			LOG_MESSAGE( " WARN - timeout resposta - %d\n", *loop_error);
 			if(*loop_error < MAX_READ_ERRORS){
 				LOG_MESSAGE("WARN - Read Service Timeout %d - mmsError %d\n", *loop_error, mmsError);
@@ -282,7 +282,7 @@ int check_connection(MmsConnection con, char * id_iccp, int * loop_error) {
 				return -1;
 			}
 		} else if (mmsError == MMS_ERROR_NONE) {
-			*loop_error++;
+			*loop_error = (*loop_error) + 1;
 			LOG_MESSAGE( "WARN - loop_erro %d\n", *loop_error);
 			if(*loop_error < MAX_READ_ERRORS){
 				LOG_MESSAGE("WARN - loop error %d reading value - mmsError %d\n", *loop_error, mmsError);
