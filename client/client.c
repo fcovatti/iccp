@@ -151,7 +151,7 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 					if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
 						LOG_MESSAGE( "Error sending list of analog ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 					}
-					if(bkp_present){
+					if(bkp_enabled){
 						if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, MAX_MSGS_GI_ANALOG)< 0){
 							LOG_MESSAGE( "Error sending list of analog ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 						}
@@ -171,7 +171,7 @@ void handle_analog_integrity(st_server_data *srv_data, int dataset, data_to_hand
 		if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
 			LOG_MESSAGE( "Error sending rest of analog ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 		}
-		if(bkp_present){
+		if(bkp_enabled){
 			if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, values, states, (msg_queue%MAX_MSGS_GI_ANALOG))< 0){
 				LOG_MESSAGE( "Error sending rest of analog ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_ANALOG); 
 			}
@@ -210,7 +210,7 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
 						LOG_MESSAGE( "Error sending list of digital ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 					}
-					if(bkp_present){
+					if(bkp_enabled){
 						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states, MAX_MSGS_GI_DIGITAL)< 0){
 							LOG_MESSAGE( "Error sending list of digital ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 						}
@@ -228,7 +228,7 @@ void handle_digital_integrity(st_server_data *srv_data, int dataset, data_to_han
 		if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
 			LOG_MESSAGE( "Error sending list of digital ds %d part %d - main\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 
 		}
-		if(bkp_present){
+		if(bkp_enabled){
 			if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,npontos, ihm_station, states,  (msg_queue%MAX_MSGS_GI_DIGITAL))< 0){
 				LOG_MESSAGE( "Error sending list of digital ds %d part %d - bkp\n", dataset,msg_queue/MAX_MSGS_GI_DIGITAL); 					
 			}
@@ -294,7 +294,7 @@ void handle_analog_report(st_server_data *srv_data, float value, unsigned char s
 				if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
 					LOG_MESSAGE( "Error sending analog buffer main \n");
 				}
-				if(bkp_present){
+				if(bkp_enabled){
 					if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, MAX_MSGS_SQ_ANALOG) <0){
 						LOG_MESSAGE( "Error sending analog buffer bkp \n");
 					}
@@ -346,7 +346,7 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 						LOG_MESSAGE( "Error sending digital buffer main\n");
 					}
-					if(bkp_present) {
+					if(bkp_enabled) {
 						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 							LOG_MESSAGE( "Error sending digital buffer bkp\n");
 						}
@@ -365,7 +365,7 @@ void handle_digital_report(st_server_data *srv_data, unsigned char state, unsign
 				if(send_digital_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 					LOG_MESSAGE( "Error sending nponto %d main\n", digital_cfg[index].nponto);
 				}
-				if(bkp_present) {
+				if(bkp_enabled) {
 					if(send_digital_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, digital_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 						LOG_MESSAGE( "Error sending nponto %d bkp\n", digital_cfg[index].nponto);
 					}
@@ -427,7 +427,7 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 						LOG_MESSAGE( "Error sending digital buffer main \n");
 					}
-					if(bkp_present){
+					if(bkp_enabled){
 						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station, digital_queue.states, MAX_MSGS_SQ_DIGITAL) <0){
 							LOG_MESSAGE( "Error sending digital buffer bkp \n");
 						}
@@ -446,7 +446,7 @@ void handle_event_report(st_server_data *srv_data, unsigned char state, unsigned
 				if(send_digital_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, events_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 					LOG_MESSAGE( "Error sending nponto %d main\n", events_cfg[index].nponto);
 				}
-				if(bkp_present){
+				if(bkp_enabled){
 					if(send_digital_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, events_cfg[index].nponto, ihm_station, state, time_stamp, time_stamp_extended, 1) < 0){
 						LOG_MESSAGE( "Error sending nponto %d bkp\n", events_cfg[index].nponto);
 					}
@@ -1568,13 +1568,13 @@ static void check_commands(){
 				//TODO:check if both connections enabled and send to the one with monitored state valid
 				if(command_variable(srv_main.con, commands[i].id, cmd_recv.onoff)<0){
 					send_cmd_response_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
-					if(bkp_present)
+					if(bkp_enabled)
 						send_cmd_response_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, commands[i].nponto, ihm_station, 0); //CMD ERROR
 					commands[i].num_of_cmd_error++;
 					LOG_MESSAGE("Error writing %d to %s\n", cmd_recv.onoff, commands[i].id);
 				} else {
 					send_cmd_response_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr, commands[i].nponto, ihm_station, 1); //CMD OK
-					if(bkp_present)
+					if(bkp_enabled)
 						send_cmd_response_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr, commands[i].nponto, ihm_station, 1); //CMD OK
 					commands[i].num_of_cmd_ok++;
 					LOG_MESSAGE("Done writing %d to %s\n", cmd_recv.onoff, commands[i].id);
@@ -2005,7 +2005,7 @@ int main (int argc, char ** argv){
 					if(send_analog_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
 						LOG_MESSAGE( "Error sending analog buffer to main IHM\n");
 					}
-					if(bkp_present){
+					if(bkp_enabled){
 						if(send_analog_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,analog_queue.npontos, ihm_station, analog_queue.values, analog_queue.states, analog_queue.size) <0){
 							LOG_MESSAGE( "Error sending analog buffer to bkp IHM \n");
 						}
@@ -2021,7 +2021,7 @@ int main (int argc, char ** argv){
 					if(send_digital_list_to_ihm(ihm_main_socket_send, &ihm_main_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
 						LOG_MESSAGE( "Error sending digital buffer to main IHM \n");
 					}
-					if(bkp_present){
+					if(bkp_enabled){
 						if(send_digital_list_to_ihm(ihm_bkp_socket_send, &ihm_bkp_sock_addr,digital_queue.npontos, ihm_station,  digital_queue.states, digital_queue.size) <0){
 							LOG_MESSAGE( "Error sending digital buffer to bkp IHM\n");
 						}
