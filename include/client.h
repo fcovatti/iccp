@@ -74,6 +74,7 @@
 #define ORIGIN_CALC  1
 #define ORIGIN_MANUAL 6
 #define ORIGIN_COMMAND 7
+#define ORIGIN_LUA 23
 
 //Report Handlings
 #define REPORT_BUFFERED		0x01		//RBE flag, buffer reports

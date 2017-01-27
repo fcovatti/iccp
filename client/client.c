@@ -1238,6 +1238,8 @@ static int read_configuration() {
 			LOG_MESSAGE("INFO - Ignoring Calculate object %s\n", id_ponto);
 		}else if (origin == ORIGIN_MANUAL){
 			LOG_MESSAGE("INFO - Ignoring Manual object %s\n", id_ponto);
+		}else if (origin == ORIGIN_LUA){
+			LOG_MESSAGE("INFO - Ignoring Lua object %s\n", id_ponto);
 		}//Command Digital or Analog
 		else if((type == 'D'||type=='A') && origin == ORIGIN_COMMAND ){
 			//add $C to the end of command
