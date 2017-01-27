@@ -1257,7 +1257,7 @@ static int read_configuration() {
 
 			num_of_commands++;
 		}//Events
-		else if(type == 'D' && event == 3){
+		else if(type == 'D' && event == 3 && origin == ORIGIN_DEFAULT){
 			memcpy(events_cfg[num_of_event_ids].id,id_ponto,25);
 			events_cfg[num_of_event_ids].nponto = nponto;
 			
@@ -1280,7 +1280,7 @@ static int read_configuration() {
 			}
 			num_of_event_ids++;
 		} //Digital
-		else if(type == 'D'){
+		else if(type == 'D' && origin == ORIGIN_DEFAULT){
 			memcpy(digital_cfg[num_of_digital_ids].id,id_ponto,25);
 			digital_cfg[num_of_digital_ids].nponto = nponto;
 			
@@ -1302,12 +1302,15 @@ static int read_configuration() {
 			}
 			num_of_digital_ids++;
 		} //Analog
-		else if(type == 'A'){
+		else if(type == 'A'  && origin == ORIGIN_DEFAULT){
 			memcpy(analog_cfg[num_of_analog_ids].id,id_ponto,25);
 			analog_cfg[num_of_analog_ids].nponto = nponto;
 			memcpy(analog_cfg[num_of_analog_ids].state_on,state_name,  16);
 			num_of_analog_ids++;
 		} //Unknown 
+		else if(origin != ORIGIN_DEFAULT){
+			LOG_MESSAGE("INFO - Ignoring Unkwnon type object %s\n", id_ponto);
+		}
 		else {
 			LOG_MESSAGE("WARNING - ERROR reading configuration file! Unknown type\n");
 		}

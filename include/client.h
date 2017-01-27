@@ -71,6 +71,7 @@
 #define MAX_READ_ERRORS 10
 
 // Object configuration origins
+#define ORIGIN_DEFAULT  0
 #define ORIGIN_CALC  1
 #define ORIGIN_MANUAL 6
 #define ORIGIN_COMMAND 7
