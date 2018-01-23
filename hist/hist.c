@@ -13,8 +13,8 @@
 
 static int hist_socket_receive=0;
 static MYSQL *con;
-char query[100];
-char longquery[10000];
+static char query[100];
+static char longquery[15000];
 static unsigned int events_msgs;
 static unsigned int digital_msgs;
 static unsigned int analog_msgs;
@@ -70,7 +70,6 @@ static int check_packet(){
 	t_msgsup *msg;
 	t_msgsupsq *msg_sq;
 	msg_rcv = WaitT(hist_socket_receive, 2000);	
-	printf("check packet\n");
 	if(msg_rcv != NULL) {
 		memcpy(&signature, msg_rcv, sizeof(unsigned int));
 		if(signature==IHM_SINGLE_POINT_SIGN){
@@ -100,29 +99,47 @@ static int check_packet(){
 			}
 		}
 		else if(signature==IHM_POINT_LIST_SIGN){
+			unsigned int i,nponto,total;
 			msg_sq=(t_msgsupsq *)msg_rcv;
-			if(msg_sq->tipo==1)
-				digital_msgs++;	
-			else if(msg_sq->tipo==13){
-				flutuante_seq *info;
-				unsigned int i,nponto,total;
+			if(msg_sq->tipo==1){
+				digital_seq * info;
 				time_t t = time(NULL);
 				struct tm tm = *localtime(&t);
 				nponto=0;
-				printf("analog %d\n", msg_sq->numpoints);
-
-				memset(longquery,0,10000);
-				snprintf(longquery, 100, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
-				printf("total %d");
+				memset(longquery,0,15000);
+				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
+				for (i=0;i<msg_sq->numpoints;i++){
+					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
+					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
+					snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
+					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->iq);
+				}
+				longquery[strlen(longquery)-1]=';';
+				if (mysql_query(con,longquery)) {
+					finish_with_error(con);
+					return -1;
+				}
+				//printf("query %s \n", longquery);
+				digital_msgs++;	
+			}else if(msg_sq->tipo==13){
+				flutuante_seq *info;
+				time_t t = time(NULL);
+				struct tm tm = *localtime(&t);
+				nponto=0;
+				memset(longquery,0,15000);
+				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
 					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
-					snprintf(longquery+strlen(longquery), 100, "('%d','%02d-%02d-%02d','%02d:%02d:%02d', '%.2f', '%d'),", 
-					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->fr, info->qds);
+					snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
+					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
 				}
 				longquery[strlen(longquery)-1]=';';
-				printf("query %s \n", longquery);
-				
+				if (mysql_query(con,longquery)) {
+					finish_with_error(con);
+					return -1;
+				}
+				//printf("query %s \n", longquery);
 				analog_msgs++;
 			}else{
 				error_msgs++;
