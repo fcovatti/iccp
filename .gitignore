@@ -10,11 +10,14 @@
 *.d
 *.bkp
 *.h.gch
+*.swp
 build/*
 bin/*
 client/iccp_client*
+client/sage_id*
 inspector/inspector*
 dumper/stats_dump*
 ihm/ihm_test*
+hist/hist
 .cproject
 .project

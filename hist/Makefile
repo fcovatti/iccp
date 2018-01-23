@@ -1,8 +1,8 @@
 LIBIEC_HOME=../../libiec61850-iccp-0.7.7
 
-PROJECT_BINARY_NAME = ihm_test
+PROJECT_BINARY_NAME = hist
 PROJECT_SOURCES = ../util/dcomm.c
-PROJECT_SOURCES += ihm.c
+PROJECT_SOURCES += hist.c
 #PROJECT_SOURCES += control.c
 
 include $(LIBIEC_HOME)/make/target_system.mk
@@ -13,7 +13,7 @@ all:	$(PROJECT_BINARY_NAME)
 include $(LIBIEC_HOME)/make/common_targets.mk
 
 $(PROJECT_BINARY_NAME):	$(PROJECT_SOURCES) $(LIB_NAME)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $(PROJECT_BINARY_NAME) -I../include $(PROJECT_SOURCES) $(INCLUDES) $(LIB_NAME) $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(PROJECT_BINARY_NAME) -I../include $(PROJECT_SOURCES) $(INCLUDES) $(LIB_NAME) $(LDLIBS) `mysql_config --cflags --libs`
 
 clean:
 	rm -f $(PROJECT_BINARY_NAME)

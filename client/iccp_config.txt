@@ -6,7 +6,7 @@ IDICCP="HIS";
 // Servers 5 to 6 Backup ICCP Servers IPs
 // EX: srv1/srv2 IPs ems1, srv3/srv4 IPs ems2, srv5/srv6 IPs ems3, srv7/srv8 IPs ems3
 // Currently servers 5 to 8 don't work
-SERVER_NAME_1="10.63.70.81";
+SERVER_NAME_1="127.0.0.1";
 SERVER_NAME_2="no";
 SERVER_NAME_3="no";
 SERVER_NAME_4="no";
@@ -16,16 +16,14 @@ SERVER_NAME_7="no";
 SERVER_NAME_8="no";
 
 //Name or IP of the IHM (if no IHM configured use "no")
-IHM_ADDRESS="10.63.77.174";
 //IHM_ADDRESS="127.0.0.1";
-//IHM_ADDRESS="no";
+IHM_ADDRESS="no";
 
 //Name or IP of the Backup ICCP client (if no backup configured use "no")
-ICCP_BKP_ADDRESS="10.63.77.174";
-//ICCP_BKP_ADDRESS="no";
+//ICCP_BKP_ADDRESS="127.0.0.1";
+ICCP_BKP_ADDRESS="no";
 
 //Name or IP of the server allowed to check ICCP Stats (if no stats configured use "no")
-//ICCP_STATS_ADDRESS="10.63.77.174";
 ICCP_STATS_ADDRESS="127.0.0.1";
 //ICCP_STATS_ADDRESS="no";
 
