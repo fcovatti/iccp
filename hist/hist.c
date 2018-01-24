@@ -20,6 +20,12 @@ static unsigned int digital_msgs;
 static unsigned int analog_msgs;
 static unsigned int error_msgs;
 static unsigned int should_be_type_30;
+typedef struct {
+	float value;
+	unsigned char flags;
+} database;
+
+static database data[1000000];
 
 static int running = 1; //used on handler for signal interruption
 /*********************************************************************************************************/
@@ -99,45 +105,64 @@ static int check_packet(){
 			}
 		}
 		else if(signature==IHM_POINT_LIST_SIGN){
-			unsigned int i,nponto,total;
+			unsigned int i,nponto,total,decminuto,insertone=0;
 			msg_sq=(t_msgsupsq *)msg_rcv;
+			time_t t = time(NULL);
+			struct tm tm = *localtime(&t);
+			//write exactly every five minutos
+			if(tm.tm_min%10>5)
+				decminuto=5;
+			else
+				decminuto=0;
+
 			if(msg_sq->tipo==1){
 				digital_seq * info;
-				time_t t = time(NULL);
-				struct tm tm = *localtime(&t);
-				nponto=0;
+							nponto=0;
 				memset(longquery,0,15000);
 				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
 					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
-					snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
-					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->iq);
+					if(data[nponto].flags!=info->iq){
+						snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->iq);
+						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->iq);
+						insertone=1;
+						data[nponto].flags=info->iq;
+					}
 				}
-				longquery[strlen(longquery)-1]=';';
-				if (mysql_query(con,longquery)) {
-					finish_with_error(con);
-					return -1;
+				if(insertone){
+					longquery[strlen(longquery)-1]=';';
+					if (mysql_query(con,longquery)) {
+						finish_with_error(con);
+						return -1;
+					}
 				}
 				//printf("query %s \n", longquery);
 				digital_msgs++;	
 			}else if(msg_sq->tipo==13){
 				flutuante_seq *info;
-				time_t t = time(NULL);
-				struct tm tm = *localtime(&t);
 				nponto=0;
 				memset(longquery,0,15000);
 				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
 					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
-					snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
-					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
+					if(data[nponto].flags!=info->qds || (fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.001)) || (fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>0.099 )){
+						snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
+						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
+						insertone=1;
+						data[nponto].flags =info->qds;
+						data[nponto].value =info->fr;
+					}
 				}
-				longquery[strlen(longquery)-1]=';';
-				if (mysql_query(con,longquery)) {
-					finish_with_error(con);
-					return -1;
+				if(insertone){
+					longquery[strlen(longquery)-1]=';';
+					if (mysql_query(con,longquery)) {
+						finish_with_error(con);
+						return -1;
+					}
 				}
 				//printf("query %s \n", longquery);
 				analog_msgs++;
@@ -150,12 +175,16 @@ static int check_packet(){
 			error_msgs++;
 			//printf("wrong signature %d\n", signature);
 		}
+		free(msg_rcv);
 	}
 	return 0;
 }
 /*********************************************************************************************************/
 int main (int argc, char ** argv){
+	int i;
 	signal(SIGINT, sigint_handler);
+	for(i=0;i<1000000;i++)
+		data[i].flags=255;
 	if(create_db_comm() <0){
 		printf("could not create db comm\n");
 		return -1;
