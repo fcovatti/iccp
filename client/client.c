@@ -14,6 +14,10 @@
 #include "control.h"
 #include "socket.h"
 
+
+/***************************** Defines to iccp work as history********************************************/
+//#define ICCP_FOR_HISTORY	1
+
 /***************************** Defines for code debugging********************************************/
 //#define HANDLE_DIGITAL_DATA_DEBUG 1
 //#define HANDLE_ANALOG_DATA_DEBUG 1
@@ -1822,7 +1826,11 @@ static int start_iccp(st_server_data * srv_data){
 		fflush(stdout);
 		
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
+#ifdef ICCP_FOR_HISTORY	
+			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES);
+#else
 			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES|REPORT_BUFFERED);
+#endif
 			if(read_dataset(srv_data, dataset_conf[i].id, i) < 0)
 				return -1;
 		}
