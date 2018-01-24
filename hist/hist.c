@@ -26,7 +26,7 @@ typedef struct {
 } database;
 
 static database data[1000000];
-
+static int currday=-1; //day control in order to write at least once every day to the table
 static int running = 1; //used on handler for signal interruption
 /*********************************************************************************************************/
 static void sigint_handler(int signalId)
@@ -107,14 +107,25 @@ static int check_packet(){
 		else if(signature==IHM_POINT_LIST_SIGN){
 			unsigned int i,nponto,total,decminuto,insertone=0;
 			msg_sq=(t_msgsupsq *)msg_rcv;
+
+			//get current time
 			time_t t = time(NULL);
 			struct tm tm = *localtime(&t);
-			//write exactly every five minutos
+			
+			//write data exactly every five minutos
 			if(tm.tm_min%10>5)
 				decminuto=5;
 			else
 				decminuto=0;
+			
+			//new day or starting process, reset flags in order to write again all data
+			if(tm.tm_mday!=currday){
+				for(i=0;i<1000000;i++)
+					data[i].flags=255;
+				currday=tm.tm_mday;
+			}
 
+			//if digital
 			if(msg_sq->tipo==1){
 				digital_seq * info;
 							nponto=0;
@@ -130,6 +141,7 @@ static int check_packet(){
 						insertone=1;
 						data[nponto].flags=info->iq;
 					}
+					
 				}
 				if(insertone){
 					longquery[strlen(longquery)-1]=';';
@@ -140,6 +152,8 @@ static int check_packet(){
 				}
 				//printf("query %s \n", longquery);
 				digital_msgs++;	
+			
+			//if analog data
 			}else if(msg_sq->tipo==13){
 				flutuante_seq *info;
 				nponto=0;
@@ -183,8 +197,7 @@ static int check_packet(){
 int main (int argc, char ** argv){
 	int i;
 	signal(SIGINT, sigint_handler);
-	for(i=0;i<1000000;i++)
-		data[i].flags=255;
+	
 	if(create_db_comm() <0){
 		printf("could not create db comm\n");
 		return -1;
