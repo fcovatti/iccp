@@ -1827,7 +1827,7 @@ static int start_iccp(st_server_data * srv_data){
 		
 		if(dataset_conf[i].type == DATASET_ANALOG){ 
 #ifdef ICCP_FOR_HISTORY	
-			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES);
+			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT);
 #else
 			write_dataset(srv_data->con, IDICCP, dataset_conf[i].id, dataset_conf[i].ts, analog_buf, integrity_time, REPORT_INTERVAL_TIMEOUT|REPORT_OBJECT_CHANGES|REPORT_BUFFERED);
 #endif
