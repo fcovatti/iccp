@@ -11,6 +11,8 @@
 #include <mysql.h>
 #include <time.h>
 
+#define CONVERT_GMT_TO_LOCAL	3
+
 static int hist_socket_receive=0;
 static MYSQL *con;
 static char query[100];
@@ -27,6 +29,7 @@ typedef struct {
 
 static database data[1000000];
 static int currday=-1; //day control in order to write at least once every day to the table
+static int currmon=-1; //day control in order to write at least once every day to the table
 static int running = 1; //used on handler for signal interruption
 /*********************************************************************************************************/
 static void sigint_handler(int signalId)
@@ -69,12 +72,15 @@ static int create_db_comm(){
 	}    
 	return 0;
 }
-/*********************************************************************************************************/
+/**************l*******************************************************************************************/
 static int check_packet(){
 	char * msg_rcv;
 	unsigned int signature;
+	struct tm tm;
+	time_t t;
 	t_msgsup *msg;
 	t_msgsupsq *msg_sq;
+	
 	msg_rcv = WaitT(hist_socket_receive, 2000);	
 	if(msg_rcv != NULL) {
 		memcpy(&signature, msg_rcv, sizeof(unsigned int));
@@ -87,8 +93,22 @@ static int check_packet(){
 				//printf("%06d %02x %02d%02d%02d %02d%02d%02d%03d\n", msg->endereco, info->iq, info->dia, info->mes, 
 				//		info->ano, info->hora, info->min, info->ms/1000, info->ms%1000 );
 				memset(query,0,100);
-				snprintf(query, 100, "INSERT INTO sde VALUES('%d','0','20%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
+#ifdef CONVERT_GMT_TO_LOCAL	
+				memset(&tm,0,sizeof(struct tm));
+				tm.tm_year=2000+info->ano-1900;
+				tm.tm_mon=info->mes;
+				tm.tm_mday=info->dia;
+				tm.tm_hour=info->hora;
+				t = mktime(&tm);
+				t=t+3600*CONVERT_GMT_TO_LOCAL;//define hours shift
+				tm=*localtime(&t);
+				//use new year/month/day/hour generate with shift. min and seconds continue the same
+				snprintf(query, 100, "INSERT IGNORE INTO sde VALUES('%d','0','%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
+						msg->endereco, tm.tm_year+1900, tm.tm_mon, tm.tm_mday, tm.tm_hour, info->min, info->ms/1000, info->ms%1000, info->iq);
+#else
+				snprintf(query, 100, "INSERT IGNORE INTO sde VALUES('%d','0','20%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
 						msg->endereco, info->ano, info->mes, info->dia, info->hora, info->min, info->ms/1000, info->ms%1000, info->iq);
+#endif
 				printf("query %s\n", query);
 				if (mysql_query(con,query)) {
 					finish_with_error(con);
@@ -109,11 +129,11 @@ static int check_packet(){
 			msg_sq=(t_msgsupsq *)msg_rcv;
 
 			//get current time
-			time_t t = time(NULL);
-			struct tm tm = *localtime(&t);
+			t = time(NULL);
+		   	tm = *localtime(&t);//get local time
 			
 			//write data exactly every five minutos
-			if(tm.tm_min%10>5)
+			if(tm.tm_min%10>=5)
 				decminuto=5;
 			else
 				decminuto=0;
@@ -125,12 +145,42 @@ static int check_packet(){
 				currday=tm.tm_mday;
 			}
 
+			//if month has changed create a new table
+			if(tm.tm_mon!=currmon){
+				MYSQL_RES * result;
+				int found=0;
+				memset(query,0,100);
+				snprintf(query, 100, "show tables like 'h%d_%02d'",tm.tm_year+1900, tm.tm_mon+1);
+				if (mysql_query(con,query)) {
+						finish_with_error(con);
+						return -1;
+				}
+				result=mysql_store_result(con);
+				if(result){
+					if(mysql_num_rows(result)){
+						printf("found table h%d_%02d\n",tm.tm_year+1900, tm.tm_mon+1);
+						found=1;
+					}
+				}	
+				mysql_free_result(result);
+				if(!found){
+					printf("table h%d_%02d not found creating it\n",tm.tm_year+1900, tm.tm_mon+1);
+					memset(query,0,100);
+					snprintf(query, 100, "create table `h%d_%02d` like `h2018_01`",tm.tm_year+1900, tm.tm_mon+1);
+					if (mysql_query(con,query)) {
+						finish_with_error(con);
+						return -1;
+					}
+				}
+				currmon=tm.tm_mon;
+			}
+
 			//if digital
 			if(msg_sq->tipo==1){
 				digital_seq * info;
 							nponto=0;
 				memset(longquery,0,15000);
-				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
+				snprintf(longquery, 65, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
 					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
@@ -158,11 +208,16 @@ static int check_packet(){
 				flutuante_seq *info;
 				nponto=0;
 				memset(longquery,0,15000);
-				snprintf(longquery, 65, "INSERT INTO h2018_01 (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
+				snprintf(longquery, 65, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
 					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
-					if(data[nponto].flags!=info->qds || (fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.001)) || (fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>0.099 )){
+					//write analog if flag has changed
+					//values >100 have changed more than 1%
+					//values =< 100 have changed > 0.1 and is not oscilating betwen -0.2 and 0.2
+					if(data[nponto].flags!=info->qds || 
+							(fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.001)) || 
+							(fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>0.099 && (fabs(info->fr)>0.2 || fabs(data[nponto].value)>0.2))){
 						snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
 						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
