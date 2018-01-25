@@ -11,6 +11,15 @@
 #include <mysql.h>
 #include <time.h>
 
+/*****************READ ME******************
+ *
+ *  Table sde must be created
+ *  Reference Table h0000_00 must be created
+ *  Support to nponto values until 1 million (database)
+ *  Writing events on receive (ignoring duplicate entries)
+ *  Writing digital data and analog once a day or on persistent change in a 5 minute window
+ * */
+
 #define CONVERT_GMT_TO_LOCAL	3
 
 static int hist_socket_receive=0;
@@ -166,7 +175,7 @@ static int check_packet(){
 				if(!found){
 					printf("table h%d_%02d not found creating it\n",tm.tm_year+1900, tm.tm_mon+1);
 					memset(query,0,100);
-					snprintf(query, 100, "create table `h%d_%02d` like `h2018_01`",tm.tm_year+1900, tm.tm_mon+1);
+					snprintf(query, 100, "create table `h%d_%02d` like `h0000_00`",tm.tm_year+1900, tm.tm_mon+1);
 					if (mysql_query(con,query)) {
 						finish_with_error(con);
 						return -1;
