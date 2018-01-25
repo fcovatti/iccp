@@ -21,11 +21,14 @@
  * */
 
 #define CONVERT_GMT_TO_LOCAL	3
+#define QUERY_SIZE				100
+#define LONG_QUERY_SIZE			15000
+#define DATABASE_SIZE			1000000
 
 static int hist_socket_receive=0;
 static MYSQL *con;
-static char query[100];
-static char longquery[15000];
+static char query[QUERY_SIZE];
+static char longquery[LONG_QUERY_SIZE];
 static unsigned int events_msgs;
 static unsigned int digital_msgs;
 static unsigned int analog_msgs;
@@ -36,7 +39,7 @@ typedef struct {
 	unsigned char flags;
 } database;
 
-static database data[1000000];
+static database data[DATABASE_SIZE];
 static int currday=-1; //day control in order to write at least once every day to the table
 static int currmon=-1; //day control in order to write at least once every day to the table
 static int running = 1; //used on handler for signal interruption
@@ -101,7 +104,7 @@ static int check_packet(){
 				events_msgs++;
 				//printf("%06d %02x %02d%02d%02d %02d%02d%02d%03d\n", msg->endereco, info->iq, info->dia, info->mes, 
 				//		info->ano, info->hora, info->min, info->ms/1000, info->ms%1000 );
-				memset(query,0,100);
+				memset(query,0,QUERY_SIZE);
 #ifdef CONVERT_GMT_TO_LOCAL	
 				memset(&tm,0,sizeof(struct tm));
 				tm.tm_year=2000+info->ano-1900;
@@ -112,10 +115,10 @@ static int check_packet(){
 				t=t+3600*CONVERT_GMT_TO_LOCAL;//define hours shift
 				tm=*localtime(&t);
 				//use new year/month/day/hour generate with shift. min and seconds continue the same
-				snprintf(query, 100, "INSERT IGNORE INTO sde VALUES('%d','0','%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
+				snprintf(query, QUERY_SIZE, "INSERT IGNORE INTO sde VALUES('%d','0','%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
 						msg->endereco, tm.tm_year+1900, tm.tm_mon, tm.tm_mday, tm.tm_hour, info->min, info->ms/1000, info->ms%1000, info->iq);
 #else
-				snprintf(query, 100, "INSERT IGNORE INTO sde VALUES('%d','0','20%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
+				snprintf(query, QUERY_SIZE, "INSERT IGNORE INTO sde VALUES('%d','0','20%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
 						msg->endereco, info->ano, info->mes, info->dia, info->hora, info->min, info->ms/1000, info->ms%1000, info->iq);
 #endif
 				printf("query %s\n", query);
@@ -149,7 +152,7 @@ static int check_packet(){
 			
 			//new day or starting process, reset flags in order to write again all data
 			if(tm.tm_mday!=currday){
-				for(i=0;i<1000000;i++)
+				for(i=0;i<DATABASE_SIZE;i++)
 					data[i].flags=255;
 				currday=tm.tm_mday;
 			}
@@ -158,8 +161,8 @@ static int check_packet(){
 			if(tm.tm_mon!=currmon){
 				MYSQL_RES * result;
 				int found=0;
-				memset(query,0,100);
-				snprintf(query, 100, "show tables like 'h%d_%02d'",tm.tm_year+1900, tm.tm_mon+1);
+				memset(query,0,QUERY_SIZE);
+				snprintf(query, QUERY_SIZE, "show tables like 'h%d_%02d'",tm.tm_year+1900, tm.tm_mon+1);
 				if (mysql_query(con,query)) {
 						finish_with_error(con);
 						return -1;
@@ -174,8 +177,8 @@ static int check_packet(){
 				mysql_free_result(result);
 				if(!found){
 					printf("table h%d_%02d not found creating it\n",tm.tm_year+1900, tm.tm_mon+1);
-					memset(query,0,100);
-					snprintf(query, 100, "create table `h%d_%02d` like `h0000_00`",tm.tm_year+1900, tm.tm_mon+1);
+					memset(query,0,QUERY_SIZE);
+					snprintf(query, QUERY_SIZE, "create table `h%d_%02d` like `h0000_00`",tm.tm_year+1900, tm.tm_mon+1);
 					if (mysql_query(con,query)) {
 						finish_with_error(con);
 						return -1;
@@ -188,13 +191,13 @@ static int check_packet(){
 			if(msg_sq->tipo==1){
 				digital_seq * info;
 							nponto=0;
-				memset(longquery,0,15000);
-				snprintf(longquery, 65, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
+				memset(longquery,0,LONG_QUERY_SIZE);
+				snprintf(longquery, QUERY_SIZE, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
 					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
 					if(data[nponto].flags!=info->iq){
-						snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
+						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
 						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->iq);
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->iq);
 						insertone=1;
@@ -216,8 +219,8 @@ static int check_packet(){
 			}else if(msg_sq->tipo==13){
 				flutuante_seq *info;
 				nponto=0;
-				memset(longquery,0,15000);
-				snprintf(longquery, 65, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
+				memset(longquery,0,LONG_QUERY_SIZE);
+				snprintf(longquery, QUERY_SIZE, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
 					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
@@ -227,7 +230,7 @@ static int check_packet(){
 					if(data[nponto].flags!=info->qds || 
 							(fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.001)) || 
 							(fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>0.099 && (fabs(info->fr)>0.2 || fabs(data[nponto].value)>0.2))){
-						snprintf(longquery+strlen(longquery), 65, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
+						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
 						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
 						insertone=1;
