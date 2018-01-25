@@ -24,6 +24,7 @@
 #define QUERY_SIZE				100
 #define LONG_QUERY_SIZE			15000
 #define DATABASE_SIZE			1000000
+#define FLAGS_INIT				255
 
 static int hist_socket_receive=0;
 static MYSQL *con;
@@ -37,6 +38,7 @@ static unsigned int should_be_type_30;
 typedef struct {
 	float value;
 	unsigned char flags;
+	unsigned int lastchange;
 } database;
 
 static database data[DATABASE_SIZE];
@@ -95,15 +97,67 @@ static int check_packet(){
 	
 	msg_rcv = WaitT(hist_socket_receive, 2000);	
 	if(msg_rcv != NULL) {
+		
+		t = time(NULL);
+		tm = *localtime(&t);//get local time
+
+		
+		//first of all, if month has changed, or first time check/create a new table
+		if(tm.tm_mon!=currmon){
+			MYSQL_RES * result;
+			int found=0;
+			memset(query,0,QUERY_SIZE);
+			snprintf(query, QUERY_SIZE, "show tables like 'h%d_%02d'",tm.tm_year+1900, tm.tm_mon+1);
+			if (mysql_query(con,query)) {
+				finish_with_error(con);
+				return -1;
+			}
+			result=mysql_store_result(con);
+			if(result){
+				if(mysql_num_rows(result)){
+					found=1;
+				}
+			}	
+			mysql_free_result(result);
+			if(!found){
+				memset(query,0,QUERY_SIZE);
+				snprintf(query, QUERY_SIZE, "create table `h%d_%02d` like `h0000_00`",tm.tm_year+1900, tm.tm_mon+1);
+				printf("%s\n",query);
+				if (mysql_query(con,query)) {
+					finish_with_error(con);
+					return -1;
+				}
+			}
+			currmon=tm.tm_mon;
+		}
+
+
+		//copy type of message
 		memcpy(&signature, msg_rcv, sizeof(unsigned int));
+
+		//digital report 
 		if(signature==IHM_SINGLE_POINT_SIGN){
 			msg=(t_msgsup *)msg_rcv;
 			if(msg->tipo==30){
 				digital_w_time7_seq *info;
 				info=(digital_w_time7_seq *)msg->info;
 				events_msgs++;
-				//printf("%06d %02x %02d%02d%02d %02d%02d%02d%03d\n", msg->endereco, info->iq, info->dia, info->mes, 
-				//		info->ano, info->hora, info->min, info->ms/1000, info->ms%1000 );
+				
+				//first insert into history if it has already been writen once (events are never writen)
+				if(msg->endereco<DATABASE_SIZE && data[msg->endereco].flags != FLAGS_INIT){
+					memset(query,0,QUERY_SIZE);
+					snprintf(query, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d VALUES ('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d')", 
+						tm.tm_year+1900, tm.tm_mon+1, msg->endereco, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->iq);
+
+					printf("%s\n", query);
+					if (mysql_query(con,query)) {
+						finish_with_error(con);
+						return -1;
+					}
+				}
+
+
+				//than insert into sde
 				memset(query,0,QUERY_SIZE);
 #ifdef CONVERT_GMT_TO_LOCAL	
 				memset(&tm,0,sizeof(struct tm));
@@ -121,11 +175,12 @@ static int check_packet(){
 				snprintf(query, QUERY_SIZE, "INSERT IGNORE INTO sde VALUES('%d','0','20%02d-%02d-%02d','%02d:%02d:%02d', '%d', '%d', '0', NULL)", 
 						msg->endereco, info->ano, info->mes, info->dia, info->hora, info->min, info->ms/1000, info->ms%1000, info->iq);
 #endif
-				printf("query %s\n", query);
+				printf("%s\n", query);
 				if (mysql_query(con,query)) {
 					finish_with_error(con);
 					return -1;
 				}
+				
 			}	
 			else if(msg->tipo==1){
 				events_msgs++;	
@@ -135,56 +190,22 @@ static int check_packet(){
 				error_msgs++;
 				//printf("wrong type %d\n",msg->tipo);
 			}
-		}
+		} //if it is a list of data
 		else if(signature==IHM_POINT_LIST_SIGN){
-			unsigned int i,nponto,total,decminuto,insertone=0;
+			unsigned int i,nponto,total,insertone=0;
 			msg_sq=(t_msgsupsq *)msg_rcv;
 
-			//get current time
-			t = time(NULL);
-		   	tm = *localtime(&t);//get local time
-			
 			//write data exactly every five minutos
-			if(tm.tm_min%10>=5)
-				decminuto=5;
-			else
-				decminuto=0;
+			//if(tm.tm_min%10>=5)
+			//	decminuto=5;
+			//else
+			//	decminuto=0;
 			
-			//new day or starting process, reset flags in order to write again all data
+			//new day or starting process, reset flags in order to write again all data (once a day)
 			if(tm.tm_mday!=currday){
 				for(i=0;i<DATABASE_SIZE;i++)
-					data[i].flags=255;
+					data[i].flags=FLAGS_INIT;
 				currday=tm.tm_mday;
-			}
-
-			//if month has changed create a new table
-			if(tm.tm_mon!=currmon){
-				MYSQL_RES * result;
-				int found=0;
-				memset(query,0,QUERY_SIZE);
-				snprintf(query, QUERY_SIZE, "show tables like 'h%d_%02d'",tm.tm_year+1900, tm.tm_mon+1);
-				if (mysql_query(con,query)) {
-						finish_with_error(con);
-						return -1;
-				}
-				result=mysql_store_result(con);
-				if(result){
-					if(mysql_num_rows(result)){
-						printf("found table h%d_%02d\n",tm.tm_year+1900, tm.tm_mon+1);
-						found=1;
-					}
-				}	
-				mysql_free_result(result);
-				if(!found){
-					printf("table h%d_%02d not found creating it\n",tm.tm_year+1900, tm.tm_mon+1);
-					memset(query,0,QUERY_SIZE);
-					snprintf(query, QUERY_SIZE, "create table `h%d_%02d` like `h0000_00`",tm.tm_year+1900, tm.tm_mon+1);
-					if (mysql_query(con,query)) {
-						finish_with_error(con);
-						return -1;
-					}
-				}
-				currmon=tm.tm_mon;
 			}
 
 			//if digital
@@ -192,14 +213,15 @@ static int check_packet(){
 				digital_seq * info;
 							nponto=0;
 				memset(longquery,0,LONG_QUERY_SIZE);
-				snprintf(longquery, QUERY_SIZE, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
+				snprintf(longquery, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
 					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
 					if(data[nponto].flags!=info->iq){
-						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
-						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->iq);
-						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->iq);
+						//snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
+						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->iq);
+						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d'),", 
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min,tm.tm_sec, info->iq);
 						insertone=1;
 						data[nponto].flags=info->iq;
 					}
@@ -220,22 +242,28 @@ static int check_packet(){
 				flutuante_seq *info;
 				nponto=0;
 				memset(longquery,0,LONG_QUERY_SIZE);
-				snprintf(longquery, QUERY_SIZE, "INSERT INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
+				snprintf(longquery, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
 					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
 					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
 					//write analog if flag has changed
-					//values >100 have changed more than 1%
-					//values =< 100 have changed > 0.1 and is not oscilating betwen -0.2 and 0.2
+					//otherwise write if values have changed more than 0.5% or at least 0.5 within a minute
+					//every five minutes write if value have changed more than 0.2% or at least 0.2
 					if(data[nponto].flags!=info->qds || 
-							(fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.001)) || 
-							(fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>0.099 && (fabs(info->fr)>0.2 || fabs(data[nponto].value)>0.2))){
+							(fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.005)) || 
+							(fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>=0.5) ||
+						   	((t-data[nponto].lastchange)>=300 && (fabs(info->fr)>100 && (fabs(info->fr-data[nponto].value)/fabs(info->fr) > 0.002)) || 
+							(fabs(info->fr)<=100 && fabs(info->fr-data[nponto].value)>=0.2) )){ //&& (fabs(info->fr)>0.2 || fabs(data[nponto].value)>0.2))){
+						//snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
+						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
+						//snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','%.2f','%d'),", 
+						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->fr, info->qds);
 						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
-						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
-						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
 						insertone=1;
 						data[nponto].flags =info->qds;
 						data[nponto].value =info->fr;
+						data[nponto].lastchange = t;
 					}
 				}
 				if(insertone){
