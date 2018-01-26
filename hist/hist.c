@@ -148,14 +148,24 @@ static int check_packet(){
 					memset(query,0,QUERY_SIZE);
 					snprintf(query, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d VALUES ('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d')", 
 						tm.tm_year+1900, tm.tm_mon+1, msg->endereco, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->iq);
-
 					printf("%s\n", query);
 					if (mysql_query(con,query)) {
 						finish_with_error(con);
 						return -1;
 					}
+				
 				}
 
+				//always update val_tr
+				memset(query,0,QUERY_SIZE);
+				snprintf(query, QUERY_SIZE, "REPLACE INTO val_tr VALUES ('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d')", 
+					 msg->endereco, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->iq);
+				printf("%s\n", query);
+				
+				if (mysql_query(con,query)) {
+					finish_with_error(con);
+					return -1;
+				}
 
 				//than insert into sde
 				memset(query,0,QUERY_SIZE);
@@ -194,6 +204,7 @@ static int check_packet(){
 		else if(signature==IHM_POINT_LIST_SIGN){
 			unsigned int i,nponto,total,insertone=0;
 			msg_sq=(t_msgsupsq *)msg_rcv;
+			nponto=0;
 
 			//write data exactly every five minutos
 			//if(tm.tm_min%10>=5)
@@ -211,7 +222,24 @@ static int check_packet(){
 			//if digital
 			if(msg_sq->tipo==1){
 				digital_seq * info;
-							nponto=0;
+
+				//first update val_tr table
+				memset(longquery,0,LONG_QUERY_SIZE);
+				snprintf(longquery, QUERY_SIZE, "REPLACE INTO val_tr (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
+				for (i=0;i<msg_sq->numpoints;i++){
+					memcpy(&nponto, &msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))], sizeof(int));
+					info=(digital_seq *)&msg_sq->info[i*(sizeof(digital_seq)+sizeof(int))+sizeof(int)];
+					snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d'),", 
+					nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min,tm.tm_sec, info->iq);
+				}
+				longquery[strlen(longquery)-1]=';';
+				if (mysql_query(con,longquery)) {
+					finish_with_error(con);
+					return -1;
+				}
+
+
+				//than update history table
 				memset(longquery,0,LONG_QUERY_SIZE);
 				snprintf(longquery, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
@@ -221,7 +249,7 @@ static int check_packet(){
 						//snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','0','%d'),", 
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->iq);
 						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','0','%d'),", 
-						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min,tm.tm_sec, info->iq);
+							nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min,tm.tm_sec, info->iq);
 						insertone=1;
 						data[nponto].flags=info->iq;
 					}
@@ -240,7 +268,25 @@ static int check_packet(){
 			//if analog data
 			}else if(msg_sq->tipo==13){
 				flutuante_seq *info;
-				nponto=0;
+			
+			
+				//first update val_tr
+				memset(longquery,0,LONG_QUERY_SIZE);
+				snprintf(longquery, QUERY_SIZE, "REPLACE INTO val_tr (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ");
+				for (i=0;i<msg_sq->numpoints;i++){
+					memcpy(&nponto, &msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))], sizeof(int));
+					info=(flutuante_seq *)&msg_sq->info[i*(sizeof(flutuante_seq)+sizeof(int))+sizeof(int)];
+					snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','%.2f','%d'),", 
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,info->fr, info->qds);
+				}
+				longquery[strlen(longquery)-1]=';';
+				if (mysql_query(con,longquery)) {
+					finish_with_error(con);
+					return -1;
+				}
+
+			
+				//than update history
 				memset(longquery,0,LONG_QUERY_SIZE);
 				snprintf(longquery, QUERY_SIZE, "INSERT IGNORE INTO h%d_%02d (NPONTO, DATA, HORA, VALOR, FLAGS) VALUES ",tm.tm_year+1900, tm.tm_mon+1);
 				for (i=0;i<msg_sq->numpoints;i++){
@@ -258,8 +304,8 @@ static int check_packet(){
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, (tm.tm_min/10)*10+decminuto, info->fr, info->qds);
 						//snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','%.2f','%d'),", 
 						//nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->fr, info->qds);
-						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:00','%.2f','%d'),", 
-						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, info->fr, info->qds);
+						snprintf(longquery+strlen(longquery), QUERY_SIZE, "('%d','%02d-%02d-%02d','%02d:%02d:%02d','%.2f','%d'),", 
+						nponto, tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, info->fr, info->qds);
 						insertone=1;
 						data[nponto].flags =info->qds;
 						data[nponto].value =info->fr;
