@@ -8,6 +8,10 @@
 #include <netinet/in.h>
 #endif
 
+
+#define MAX_STR_NAME 35
+
+
 //---------------------------------------------------------------------------
 //Mandar mensagem UDP na porta 8099, uma para cada valor de ponto, no
 //seguinte formato:

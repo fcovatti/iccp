@@ -32,7 +32,6 @@
 #define RULE0_DIGITAL_REPORT_SIZE 7
 
 #define MAX_ID_ICCP_NAME 10
-#define MAX_STR_NAME 35
 
 // Max size of the dataset. IMPORTANT (bigger than 600 can cause code crash)
 #define DATASET_MAX_SIZE 500
