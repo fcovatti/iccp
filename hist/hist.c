@@ -17,8 +17,13 @@
  *  Reference Table h0000_00 must be created
  *  Support to nponto values until 1 million (database)
  *  Writing events on receive (ignoring duplicate entries)
- *  Writing digital data and analog once a day or on persistent change in a 5 minute window
+ *  Writing digital data once a day or on value/status change
+ *  Writing analog data in 3 conditions
+ *  - if the status flag has changed
+ *  - if it has changed more than 0.5% (or 0.5) in a 1 minute window
+ *  - if the analog value has changed more than 0.2% (or 0.2) whithin a 5 minute window
  * */
+
 #define QUERY_SIZE				100
 #define LONG_QUERY_SIZE			15000
 #define DATABASE_SIZE			1000000
@@ -59,7 +64,6 @@ static void print_time(FILE * log_file){
 	localtime_r(&t, &now );
 	fprintf(log_file, "%04d/%02d/%02d %02d:%02d:%02d - ", now.tm_year+1900, now.tm_mon+1, now.tm_mday,now.tm_hour, now.tm_min,now.tm_sec);
 }
-
 /*********************************************************************************************************/
 static void finish_with_error(MYSQL *con)
 {
@@ -96,7 +100,7 @@ static int create_db_comm(){
 	LOG_MESSAGE("Created DB connection\n");
 	return 0;
 }
-/**************l*******************************************************************************************/
+/*********************************************************************************************************/
 static int check_packet(){
 	char * msg_rcv;
 	unsigned int signature;
@@ -314,9 +318,6 @@ static int check_packet(){
 }
 /*********************************************************************************************************/
 static int open_log_file(){
-	/*****************
-	 *          * OPEN LOG FILES
-	 *            * **********/
 	time_t t = time(NULL);
 	struct tm now = *localtime(&t);
 	char flog[MAX_STR_NAME];
@@ -331,7 +332,6 @@ static int open_log_file(){
 	}
 	return 0;
 }
-
 /*********************************************************************************************************/
 int main (int argc, char ** argv){
 	int i;
