@@ -2,10 +2,11 @@
 
 #defines
 CLIENT 	 = client
-SERVER   = #server
+IHM 	 = ihm
+DUMPER 	 = dumper
+HIST 	 = hist
 
-
-DIRS =  $(CLIENT) $(SERVER) 
+DIRS =  $(CLIENT) $(IHM) $(DUMPER) $(HIST)
 
 #General
 QUIET = @

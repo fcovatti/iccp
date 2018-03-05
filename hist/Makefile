@@ -1,4 +1,4 @@
-LIBIEC_HOME=../../libiec61850-iccp-0.7.7
+LIBIEC_HOME=../../libiec_iccp_mod
 
 PROJECT_BINARY_NAME = hist
 PROJECT_SOURCES = ../util/dcomm.c
