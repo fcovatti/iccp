@@ -1,5 +1,4 @@
 *.TXT
-*.txt
 *.CFG
 *.LOG
 *.BIN
@@ -14,7 +13,6 @@
 build/*
 bin/*
 client/iccp_client*
-client/sage_id*
 inspector/inspector*
 dumper/stats_dump*
 ihm/ihm_test*

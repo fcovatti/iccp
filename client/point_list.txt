@@ -1,0 +1,10 @@
+VERSAO 3 NOH 199
+NPONTO    END ID                  TIPO ALARME                         ALM  TP INF OR ES UTR ASDU  KCONV1       KCONV2   SUPCMD CD PR VALTIPICO "ESTACAO~MODULO~DESCRICAO" 
+     1      0 EXAMPLE01MTWT          A MW                             206   6 210  0 S   0  0     1.000000     0.000000      0 -1 1     94.89 "EXAMPLE 230kV~Pot.ativa"
+     2      0 EXAMPLE01MTVR          A Mvar                           207   7 210  0 S   0  0     1.000000     0.000000      0 -1 1    -11.72 "EXAMPLE 230kV~Pot.reativa"
+     3      0 EXAMPLE01MVPP--AB      A kV                             201   1   0  0 S   0  0     1.000000     0.000000      0 -1 1    238.57 "EXAMPLE 230kV~Tensão-Fases AB"
+     4      0 EXAMPLE01XCBR5211      D DESLIGADO/LIGADO                 2  27   0  0 S   0  0     1.000000     0.000000      0  2 0      0.00 "EXAMPLE 230kV~DJ52-11:estado"
+     5      0 EXAMPLE01XCBR5203      D DESLIGADO/LIGADO                 2  27   0  0 S   0  0     1.000000     0.000000      0  2 0      0.00 "EXAMPLE 230kV~DJ52-03:estado"
+     6      0 EXAMPLE01YTAP          A Pos                            216  16   0  0 S   0  0     1.000000     0.000000      0  0 1      0.00 "EXAMPLE Posição do tap"
+     7      0 EXAMPLE01MAPH--B       A A                              203   3   0  0 S   0  0     1.000000     0.000000      0  0 1    242.09 "EXAMPLE 230kV~Corrente-Fase B"
+     8      0 EXAMPLE01XCBR5211----K D Desligar/Ligar                   2  27   0  7 S   0  0     1.000000     0.000000      8  2 1      0.00 "EXAMPLE 230kV~DJ52-11:estado-Cmd"
