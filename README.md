@@ -20,7 +20,7 @@ In order to test the client it is necessary to have an ICCP running server. This
 
 cd /tmp
 
-git glone https://github.com/fcovatti/libiec_iccp_mod.git
+git clone https://github.com/fcovatti/libiec_iccp_mod.git
 
 git clone https://github.com/fcovatti/iccp.git
 
